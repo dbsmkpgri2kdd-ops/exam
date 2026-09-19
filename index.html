@@ -928,6 +928,7 @@ let isMonitoringEnabled = true
 let user = null;
 let isExamActive = false;
 let isResuming = false;
+let isReloading = false;
 let activePin = "1234";
 let violationCount = 0;
 let lastViolationTime = 0;
@@ -1510,7 +1511,7 @@ async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
     enterExamFullscreen();
 
 await clearClipboard();
-isExamActive = true;
+isExamActive = true; window.examStartTime = Date.now();
 
 // [PERBAIKAN ANTI-REFRESH]
 const savedViolations = localStorage.getItem('exam_violation_count');
@@ -1929,8 +1930,7 @@ function enableHardLockdown() {
     // Android app-switch / Home / Recent Apps / notification shade:
     // visibilitychange adalah sinyal web yang paling berguna.
     handlers.visibility = () => {
-        if (!isExamActive) return;
-
+        if (!isExamActive || isReloading) return;
         if (document.visibilityState === "hidden") {
             lastVisibilityViolation = Date.now();
             reportSecurityViolationOnce(
@@ -2069,31 +2069,21 @@ handlers.blur = () => {
 
     // pagehide bukan pengganti visibilitychange, tetapi berguna sebagai
     // sinyal tambahan ketika halaman ditinggalkan.
-    handlers.pagehide = () => {
-        if (!isExamActive) return;
-        reportSecurityViolationOnce(
-            "pagehide",
-            "Halaman Ujian Meninggalkan Layar",
-            5000
-        );
-    };
-
+    handlers.pagehide = () => { return; };
     handlers.fullscreen = () => {
-        if (!isExamActive) return;
-
-        if (!document.fullscreenElement) {
-            const now = Date.now();
-            if (now - lastFullscreenViolation < 2500) return;
-
-            lastFullscreenViolation = now;
-            reportViolation("Keluar dari Mode Layar Penuh");
-
-            // Minta kembali fullscreen setelah UI browser stabil.
-            setTimeout(() => {
-                if (isExamActive) enterExamFullscreen();
-            }, 500);
-        }
-    };
+    if (!isExamActive || isReloading) return;
+    if (!document.fullscreenElement) {
+        // Beri waktu toleransi 3 detik bagi browser untuk menstabilkan UI setelah reload
+        if (Date.now() - (window.examStartTime || 0) < 3000) return;
+        const now = Date.now();
+        if (now - lastFullscreenViolation < 2500) return;
+        lastFullscreenViolation = now;
+        reportViolation("Keluar dari Mode Layar Penuh");
+        setTimeout(() => {
+            if (isExamActive) enterExamFullscreen();
+        }, 500);
+    }
+};
 
     document.addEventListener('contextmenu', handlers.contextmenu, true);
     document.addEventListener('copy', handlers.copy, true);
@@ -2698,7 +2688,8 @@ async function generateAISoal() {
 }
 
 // --- J. PENGATURAN AKHIR ---
-window.onbeforeunload = function() { if (isExamActive) return "Sedang Ujian!"; };
+window.onbeforeunload = function() { if (isExamActive) {
+        isReloading = true; return "Sedang Ujian!"; }};
 
 // PWA: daftarkan service worker. Ini membantu install/offline app shell,
 // tetapi TIDAK memberi Android-level kiosk/lock-task.
