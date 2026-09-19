@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Exambro Pro 2026 - AI Super Edition</title>
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="PRIDA EXAMBRO">
+    <link rel="manifest" href="manifest.json">
     
     <!-- Scripts & Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -137,13 +141,6 @@
         overflow: hidden;
     }
 </style>
-
-
-<!-- SECURITY NOTICE:
-     Client-side anti-cheat is only a deterrent. Do not trust localStorage,
-     JavaScript variables, tokens, PINs, or browser events as authoritative.
-     Use Supabase Auth + RLS + Edge Functions for authorization and exam state.
--->
 
 </head>
 
@@ -333,14 +330,19 @@
                                 </div>
                                 <h3 class="font-extrabold text-slate-800 text-lg tracking-tight">Konfigurasi Akses Master</h3>
                             </div>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                                 <div class="space-y-2">
                                     <label class="text-[10px] font-black text-indigo-600 uppercase ml-1 tracking-widest">PIN Pengawas Global</label>
                                     <input type="text" id="special-pin" class="w-full bg-white p-4 rounded-2xl border border-slate-200 font-black text-slate-700 outline-none focus:ring-2 ring-indigo-400 transition-all text-sm" value="1234">
                                 </div>
                                 <div class="space-y-2">
                                     <label class="text-[10px] font-black text-indigo-600 uppercase ml-1 tracking-widest">Durasi Default (Min)</label>
-                                    <input type="number" id="special-duration" class="w-full bg-white p-4 rounded-2xl border border-slate-200 font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-400 transition-all text-sm" value="60">
+                                    <input type="number" id="special-duration" min="1" step="1" class="w-full bg-white p-4 rounded-2xl border border-slate-200 font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-400 transition-all text-sm" value="60">
+                                </div>
+                                <div class="space-y-2">
+                                    <label class="text-[10px] font-black text-indigo-600 uppercase ml-1 tracking-widest">Tombol Selesai Muncul (Min)</label>
+                                    <input type="number" id="special-finish-delay" min="0" step="1" class="w-full bg-white p-4 rounded-2xl border border-slate-200 font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-400 transition-all text-sm" value="30">
+                                    <p class="text-[9px] font-semibold text-slate-400 ml-1">0 = langsung muncul setelah ujian dimulai</p>
                                 </div>
                                 <div class="flex items-end">
                                     <button onclick="saveSpecialSettings()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all uppercase tracking-widest">Update Akses</button>
@@ -771,7 +773,7 @@
     <script>
 
 // --- A. SETUP CONFIGURATION & SUPABASE ---
-const apiKey = ""; // SECURITY: jangan taruh API key Gemini di HTML/browser.
+const apiKey = "AIzaSyBrpMLLakAoM5HIL0Vax91OI0wX371Bgxc";
 const SUPABASE_URL = "https://yeukammxkbatyldqbtzy.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlldWthbW14a2JhdHlsZHFidHp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5OTk0OTEsImV4cCI6MjA5NDU3NTQ5MX0.RVvEVGhknsaqpsJjqom9Kawum31MkOb22aM7CHvLLgk";
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
@@ -780,125 +782,6 @@ const publicData = createCollectionWrapper(db);
 const appId = 'exambro-system-2026';
 const monitorChannel = db.channel('exam-monitoring', {config: { broadcast: { self: false, ack: false } } }); monitorChannel.subscribe();
 const isLocalFileOrigin = window.location.protocol === 'file:' || window.location.origin === 'null';
-
-// ================================================================
-// EXAMBRO SECURITY HARDENING 2026
-// Catatan: proteksi browser hanya lapisan tambahan.
-// Keamanan otoritatif tetap harus ditegakkan di server/Supabase RLS.
-// ================================================================
-const SECURITY_CONFIG = {
-    sessionMaxAgeMs: 8 * 60 * 60 * 1000,
-    maxLoginAttempts: 5,
-    loginLockMs: 10 * 60 * 1000,
-    maxExamDurationMin: 240,
-    allowedExamProtocols: ['https:'],
-    allowedManualHosts: ['docs.google.com', 'forms.google.com', 'forms.gle']
-};
-
-function securityNow() { return Date.now(); }
-
-function escapeHtml(value) {
-    return String(value ?? '').replace(/[&<>"']/g, ch => ({
-        '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;'
-    }[ch]));
-}
-
-function isValidSecureUrl(rawUrl, allowManual = false) {
-    try {
-        const u = new URL(String(rawUrl || '').trim());
-        if (!SECURITY_CONFIG.allowedExamProtocols.includes(u.protocol)) return false;
-        if (!allowManual) return true;
-        const host = u.hostname.toLowerCase();
-        return SECURITY_CONFIG.allowedManualHosts.some(h => host === h || host.endsWith('.' + h));
-    } catch (_) {
-        return false;
-    }
-}
-
-function getLoginThrottleKey() {
-    const role = currentRole === 'admin' ? 'admin' : 'student';
-    const id = currentRole === 'admin'
-        ? (document.getElementById('user-id')?.value || 'admin')
-        : (document.getElementById('select-nama')?.value || 'student');
-    return `exambro_login_throttle_${role}_${id}`;
-}
-
-function loginThrottleBlocked() {
-    try {
-        const raw = localStorage.getItem(getLoginThrottleKey());
-        if (!raw) return false;
-        const d = JSON.parse(raw);
-        if (d.lockUntil && securityNow() < d.lockUntil) return true;
-        return false;
-    } catch (_) { return false; }
-}
-
-function recordLoginFailure() {
-    try {
-        const key = getLoginThrottleKey();
-        const d = JSON.parse(localStorage.getItem(key) || '{"count":0}');
-        d.count = (d.count || 0) + 1;
-        if (d.count >= SECURITY_CONFIG.maxLoginAttempts) {
-            d.lockUntil = securityNow() + SECURITY_CONFIG.loginLockMs;
-        }
-        localStorage.setItem(key, JSON.stringify(d));
-    } catch (_) {}
-}
-
-function clearLoginFailures() {
-    try { localStorage.removeItem(getLoginThrottleKey()); } catch (_) {}
-}
-
-function validateStoredSession(sessionData) {
-    if (!sessionData || !sessionData.time) return false;
-    return (securityNow() - Number(sessionData.time)) <= SECURITY_CONFIG.sessionMaxAgeMs;
-}
-
-function clearClientSession() {
-    localStorage.removeItem('exambro_session');
-    localStorage.removeItem('active_exam_state');
-    sessionStorage.removeItem('exambro_resume_nonce');
-}
-
-function createResumeNonce() {
-    const nonce = (crypto.randomUUID ? crypto.randomUUID() : `${securityNow()}-${Math.random()}`);
-    sessionStorage.setItem('exambro_resume_nonce', nonce);
-    return nonce;
-}
-
-function getResumeNonce() {
-    return sessionStorage.getItem('exambro_resume_nonce');
-}
-
-function secureExamState(state) {
-    return {
-        url: state.url,
-        mapel: state.mapel,
-        endTime: Number(state.endTime),
-        isCamera: !!state.isCamera,
-        examId: state.examId || null,
-        originalDur: Number(state.originalDur || 0),
-        resumeNonce: getResumeNonce()
-    };
-}
-
-async function requestWakeLock() {
-    try {
-        if ('wakeLock' in navigator && !window.examWakeLock) {
-            window.examWakeLock = await navigator.wakeLock.request('screen');
-        }
-    } catch (_) {}
-}
-
-async function releaseWakeLock() {
-    try {
-        if (window.examWakeLock) {
-            await window.examWakeLock.release();
-            window.examWakeLock = null;
-        }
-    } catch (_) {}
-}
-
 
 function showStartupError(message) {
     console.error('Startup Error:', message); const existing = document.getElementById('startup-error-banner'); if (existing) existing.remove();
@@ -1005,7 +888,7 @@ let initialWidth = 0;
 let initialHeight = 0;
 let monitorInterval = null;
 let currentRole = 'student';
-let specialSettings = { pin: "1234", duration: 60 };
+let specialSettings = { pin: "1234", duration: 60, finishButtonMinutes: 30 };
 let studentSnapshotInterval = null;
 let myPeer = null;
 let currentClassChannel = null;
@@ -1015,43 +898,12 @@ const sharedCtx = sharedCanvas.getContext('2d');
 
 // --- 3. INITIALIZATION ---
 window.onload = async () => {
-    if ('serviceWorker' in navigator) {navigator.serviceWorker.getRegistrations().then(function(registrations) { for(let registration of registrations) {registration.unregister(); }}); }
     try { if (!await checkSupabaseConnection()) return; document.getElementById('loading-overlay').classList.add('hidden-element');
     // 1. CEK SESSION LOGIN
     let sessionData = null; const savedSession = localStorage.getItem('exambro_session');
-        if (savedSession) {
-            try {
-                sessionData = JSON.parse(savedSession);
-                if (!validateStoredSession(sessionData)) {
-                    clearClientSession();
-                    sessionData = null;
-                } else if (sessionData.role === 'admin') {
-                    const auth = await supabaseClient.auth.getUser();
-                    if (auth.data?.user) {
-                        user = { id: auth.data.user.id, nama: auth.data.user.email || "Administrator", email: auth.data.user.email };
-                        currentRole = 'admin';
-                        setRole('admin');
-                        showPage('admin-page');
-                        syncAdminData();
-                        initAdminPeer();
-                        startMonitorFeed();
-                    } else {
-                        clearClientSession();
-                        sessionData = null;
-                    }
-                } else if (sessionData.role === 'student' && sessionData.user?.id) {
-                    user = sessionData.user;
-                    currentRole = 'student';
-                    setRole('student');
-                    document.getElementById('display-std-name').textContent = user.nama;
-                    showPage('student-page');
-                    syncStudentData();
-                    listenForAdminCommands();
-                }
-            } catch (_) {
-                clearClientSession();
-                sessionData = null;
-            }
+        if (savedSession) { sessionData = JSON.parse(savedSession);
+            if (sessionData.role === 'admin') { user = { id: 'admin', nama: 'Administrator' }; currentRole = 'admin'; setRole('admin'); showPage('admin-page'); syncAdminData(); initAdminPeer(); startMonitorFeed();
+            } else if (sessionData.role === 'student' && sessionData.user) { user = sessionData.user; currentRole = 'student'; setRole('student'); document.getElementById('display-std-name').textContent = user.nama; showPage('student-page'); syncStudentData(); listenForAdminCommands(); }
         }
         // 2. LOGIKA AUTO-RESUME UJIAN
         const activeExam = localStorage.getItem('active_exam_state');
@@ -1066,119 +918,30 @@ window.onload = async () => {
 
 // --- B. AUTHENTICATION & ROLE MANAGEMENT ---
 async function handleLogin() {
-    const pwdInput = document.getElementById('user-pwd');
-    const pwd = pwdInput.value;
-    const userIdInput = document.getElementById('user-id');
-    const selectNamaInput = document.getElementById('select-nama');
-    const loginBtn = document.querySelector('button[onclick="handleLogin()"]');
-
-    if (loginThrottleBlocked()) {
-        showNotify("Terlalu banyak percobaan login. Silakan tunggu beberapa menit.", "error");
-        return;
-    }
-    if (!pwd) { showNotify("Password wajib diisi!", "error"); return; }
-
-    loginBtn.disabled = true;
-    loginBtn.innerHTML = "Memverifikasi...";
-
+    const pwdInput = document.getElementById('user-pwd'), pwd = pwdInput.value, userIdInput = document.getElementById('user-id'), selectNamaInput = document.getElementById('select-nama'), loginBtn = document.querySelector('button[onclick="handleLogin()"]');
+    if (!pwd) {showNotify("Password wajib diisi!","error"); return; }
+    loginBtn.disabled = true; loginBtn.innerHTML = "Memverifikasi...";
     try {
         if (currentRole === 'admin') {
-            // IMPORTANT: password admin statis di HTML telah dinonaktifkan.
-            // Gunakan Supabase Auth untuk akun admin.
-            const email = userIdInput.value.trim();
-            if (!email || !email.includes('@')) {
-                recordLoginFailure();
-                showNotify("Admin harus login menggunakan email akun Supabase.", "error");
-                return;
-            }
-
-            const { data, error } = await supabaseClient.auth.signInWithPassword({
-                email, password: pwd
-            });
-            if (error || !data?.user) {
-                recordLoginFailure();
-                showNotify("Email atau password admin salah.", "error");
-                return;
-            }
-
-            clearLoginFailures();
-            user = { id: data.user.id, nama: data.user.email || "Administrator", email: data.user.email };
-            currentRole = 'admin';
-            setRole('admin');
-            localStorage.setItem('exambro_session', JSON.stringify({
-                role: 'admin', user, time: securityNow()
-            }));
-            showPage('admin-page');
-            syncAdminData();
-            initAdminPeer();
-            startMonitorFeed();
+            if (userIdInput.value === 'admin' && pwd === 'admin123') { 
+                user = { id: 'admin', nama: 'Administrator' }; currentRole = 'admin'; setRole('admin'); 
+                localStorage.setItem('exambro_session', JSON.stringify({ role: 'admin', user, time: Date.now() })); 
+                showPage('admin-page'); syncAdminData(); initAdminPeer(); startMonitorFeed();
+            } else { showNotify("Username Admin atau Password Salah!", "error"); }
         } else {
-            const userId = selectNamaInput.value;
-            if (!userId) {
-                showNotify("Silakan pilih nama Anda!", "error");
-                return;
-            }
-
-            const doc = await publicData.collection('users').doc(userId).get();
-            if (!doc.exists) {
-                recordLoginFailure();
-                showNotify("Data siswa tidak ditemukan.", "error");
-                return;
-            }
-
-            const userData = doc.data();
-            const storedPassword = userData.pwd_hash || userData.password_hash || null;
-
-            // Migrasi aman: akun lama masih bisa login, tetapi sebaiknya segera
-            // dimigrasikan ke pwd_hash melalui backend/Edge Function.
-            let passwordOk = false;
-            if (storedPassword) {
-                const digest = await crypto.subtle.digest(
-                    'SHA-256',
-                    new TextEncoder().encode(pwd)
-                );
-                const hash = Array.from(new Uint8Array(digest))
-                    .map(b => b.toString(16).padStart(2, '0')).join('');
-                passwordOk = hash === String(storedPassword).toLowerCase();
-            } else {
-                // Kompatibilitas sementara untuk database lama.
-                passwordOk = String(userData.pwd ?? '') === String(pwd);
-            }
-
-            if (!passwordOk) {
-                recordLoginFailure();
-                showNotify("Password siswa salah.", "error");
-                return;
-            }
-
-            clearLoginFailures();
-            const selectedText = selectNamaInput.options[selectNamaInput.selectedIndex].text;
-            user = {
-                id: doc.id,
-                nama: selectedText,
-                kelas: userData.kelas,
-                nis: userData.nis
-            };
-            currentRole = 'student';
-            setRole('student');
-
-            // Session hanya menyimpan identitas, bukan password.
-            localStorage.setItem('exambro_session', JSON.stringify({
-                role: 'student', user, time: securityNow()
-            }));
-
-            document.getElementById('display-std-name').textContent = user.nama;
-            showPage('student-page');
-            syncStudentData();
-            listenForAdminCommands();
+            const userId = selectNamaInput.value; if (!userId) { showNotify("Silahkan pilih nama Anda!", "error"); loginBtn.disabled = false; loginBtn.innerHTML = "MASUK SISTEM"; return; }
+            const selectedText = selectNamaInput.options[selectNamaInput.selectedIndex].text, doc = await publicData.collection('users').doc(userId).get();
+            if (doc.exists) { 
+                const userData = doc.data();
+                if (userData.pwd.toString() === pwd.toString()) { 
+                    user = { id: doc.id, nama: selectedText, kelas: userData.kelas, nis: userData.nis }; currentRole = 'student'; setRole('student'); 
+                    localStorage.setItem('exambro_session', JSON.stringify({ role: 'student', user: user, time: Date.now() })); 
+                    document.getElementById('display-std-name').textContent = user.nama; showPage('student-page'); syncStudentData(); listenForAdminCommands();
+                } else { showNotify("Password Siswa Salah!", "error");; }
+            } else { showNotify("Data tidak ditemukan!", "error"); }
         }
-    } catch (error) {
-        console.error(error);
-        showNotify("Gangguan koneksi. Silakan coba lagi.", "error");
-    } finally {
-        loginBtn.disabled = false;
-        loginBtn.innerHTML = "MASUK SISTEM";
-    }
+    } catch (error) { console.error(error); alert("Gangguan Koneksi: " + error.message); }
+    finally { loginBtn.disabled = false; loginBtn.innerHTML = "MASUK SISTEM"; }
 }
 
 async function logout() {
@@ -1187,9 +950,7 @@ async function logout() {
             if (user && user.id) await db.from('live').delete().eq('id', user.id);
             if (myPeer) myPeer.destroy(); // MATIKAN PEERJS
         } catch (e) { console.log("Clean up skip"); }
-        clearClientSession();
-        try { await supabaseClient.auth.signOut(); } catch (_) {}
-        await releaseWakeLock();
+        localStorage.removeItem('exambro_session'); 
         location.reload(); 
     }
 }
@@ -1453,10 +1214,10 @@ async function syncAdminStudentData() {
             
             data.forEach(s => {
                 list.innerHTML += `<tr class="hover:bg-slate-50 transition-colors">
-                    <td class="px-8 py-4 text-[11px] font-bold text-slate-600">${escapeHtml(s.nis)}</td>
-                    <td class="px-8 py-4 text-[11px] font-bold text-slate-900">${escapeHtml(s.nama)}</td>
-                    <td class="px-8 py-4"><span class="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[9px] font-black uppercase">${escapeHtml(s.kelas)}</span></td>
-                    <td class="px-8 py-4 text-[11px] font-mono text-slate-400">••••••••</td>
+                    <td class="px-8 py-4 text-[11px] font-bold text-slate-600">${s.nis}</td>
+                    <td class="px-8 py-4 text-[11px] font-bold text-slate-900">${s.nama}</td>
+                    <td class="px-8 py-4"><span class="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[9px] font-black uppercase">${s.kelas}</span></td>
+                    <td class="px-8 py-4 text-[11px] font-mono text-slate-400">${s.pwd}</td>
                 </tr>`;
             });
         }
@@ -1465,8 +1226,68 @@ async function syncAdminStudentData() {
     }
 }
 
-async function syncSpecialSettings() { const d = await publicData.collection('settings').doc('special_methods').get(); if(d.exists) specialSettings = d.data(); }
-async function saveSpecialSettings() { await upsertSettingsItem('special_methods', { pin: document.getElementById('special-pin').value, duration: parseInt(document.getElementById('special-duration').value), updatedAt: Date.now() }); alert("Konfigurasi Akses Cepat Diperbarui!"); }
+async function syncSpecialSettings() {
+    const d = await publicData.collection('settings').doc('special_methods').get();
+
+    if (d.exists) {
+        const saved = d.data() || {};
+        specialSettings = {
+            pin: saved.pin || "1234",
+            duration: Number(saved.duration) > 0 ? Number(saved.duration) : 60,
+            finishButtonMinutes: Number.isFinite(Number(saved.finishButtonMinutes))
+                ? Math.max(0, Number(saved.finishButtonMinutes))
+                : 30
+        };
+    }
+
+    const pinEl = document.getElementById('special-pin');
+    const durationEl = document.getElementById('special-duration');
+    const finishDelayEl = document.getElementById('special-finish-delay');
+
+    if (pinEl) pinEl.value = specialSettings.pin;
+    if (durationEl) durationEl.value = specialSettings.duration;
+    if (finishDelayEl) finishDelayEl.value = specialSettings.finishButtonMinutes;
+}
+
+async function saveSpecialSettings() {
+    const pin = document.getElementById('special-pin').value.trim();
+    const duration = parseInt(document.getElementById('special-duration').value, 10);
+    const finishDelay = parseInt(document.getElementById('special-finish-delay').value, 10);
+
+    if (!pin) {
+        alert("PIN Pengawas Global wajib diisi.");
+        return;
+    }
+
+    if (!Number.isFinite(duration) || duration < 1) {
+        alert("Durasi Default harus minimal 1 menit.");
+        return;
+    }
+
+    if (!Number.isFinite(finishDelay) || finishDelay < 0) {
+        alert("Waktu muncul tombol Selesai harus 0 atau lebih.");
+        return;
+    }
+
+    await upsertSettingsItem('special_methods', {
+        pin,
+        duration,
+        finishButtonMinutes: finishDelay,
+        updatedAt: Date.now()
+    });
+
+    specialSettings = {
+        pin,
+        duration,
+        finishButtonMinutes: finishDelay
+    };
+
+    alert(
+        `Konfigurasi berhasil diperbarui.\n\n` +
+        `Durasi default: ${duration} menit\n` +
+        `Tombol Selesai muncul setelah: ${finishDelay} menit`
+    );
+}
 
 // --- E. STUDENT SERVICE (EXAM ACCESS) ---
 async function syncStudentData() {
@@ -1525,7 +1346,7 @@ async function syncStudentData() {
                         </div>
                         <div class="mt-auto space-y-1.5">
                             <input type="text" id="tk-${x.id}" class="w-full bg-slate-50 p-2 rounded-lg text-center font-black text-[10px] outline-none border border-transparent focus:border-indigo-400 transition-all uppercase tracking-[0.2em]" placeholder="TOKEN">
-                            <button onclick="startExam('${x.id}')" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-black text-[10px] shadow-md active:scale-95 transition-all uppercase">MULAI</button>
+                            <button onclick="startExam('${x.id}', '${x.token}')" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-black text-[10px] shadow-md active:scale-95 transition-all uppercase">MULAI</button>
                         </div>
                     </div>`;
                 list.insertAdjacentHTML('beforeend', cardHtml);
@@ -1555,168 +1376,236 @@ function logActivity(a) {
 let html5QrScanner = null;
 function simulateScan() {
     switchStudentView('qr'); html5QrScanner = new Html5Qrcode("qr-reader");
-    html5QrScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, async (decodedText) => { const scannedUrl = decodedText.trim(); if (isValidSecureUrl(scannedUrl, true)) { await html5QrScanner.stop(); activePin = specialSettings.pin || "1234"; createResumeNonce(); startExamEngine(scannedUrl, "Akses Via Scan QR", Math.min(SECURITY_CONFIG.maxExamDurationMin, specialSettings.duration || 60), true); } else { alert("QR hanya boleh berisi link HTTPS dari domain ujian yang diizinkan."); } }).catch(err => { alert("Kamera Error: " + err); stopQR(); });
+    html5QrScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, async (decodedText) => { const scannedUrl = decodedText.trim(); if (scannedUrl.startsWith("http")) { await html5QrScanner.stop(); activePin = specialSettings.pin || "1234"; startExamEngine(scannedUrl, "Akses Via Scan QR", specialSettings.duration || 60, true); } else { alert("QR Code bukan berisi link valid!"); } }).catch(err => { alert("Kamera Error: " + err); stopQR(); });
 }
 async function stopQR() { if (html5QrScanner) { try { await html5QrScanner.stop(); } catch (e) {} } switchStudentView('scheduled'); }       
 
 function startManualExam() {
     const url = document.getElementById('manual-url').value.trim();
-    if (!url) { alert("Mohon tempelkan link ujian anda!"); return; } if (!isValidSecureUrl(url, true)) { alert("Link manual harus HTTPS dan berasal dari domain ujian yang diizinkan."); return; }
+    if (!url) { alert("Mohon tempelkan link ujian anda!"); return; } if (!url.startsWith("http")) { alert("Link tidak valid! Pastikan diawali dengan http:// atau https://"); return; }
     activePin = specialSettings.pin || "1234"; const duration = specialSettings.duration || 60;
     startExamEngine(url, "Manual Access", duration, true); document.getElementById('manual-url').value = "";
 }
 
-async function startExam(id) {
-    if (!user || currentRole !== 'student') {
-        showNotify("Sesi siswa tidak valid. Silakan login kembali.", "error");
-        return;
-    }
-
-    const tokenInput = (document.getElementById(`tk-${id}`)?.value || '').trim().toUpperCase();
-    if (!tokenInput) {
-        showNotify("Token ujian wajib diisi.", "error");
-        return;
-    }
-
-    try {
-        const doc = await publicData.collection('exams').doc(id).get();
-        if (!doc.exists) {
-            showNotify("Paket ujian tidak ditemukan.", "error");
-            return;
-        }
-
-        const x = doc.data();
-        const allowedClasses = String(x.kelas || '').split(',').map(v => v.trim()).filter(Boolean);
-        if (x.active === false || !allowedClasses.includes(String(user.kelas || '').trim())) {
-            showNotify("Anda tidak memiliki akses ke ujian ini.", "error");
-            return;
-        }
-
-        if (String(tokenInput) !== String(x.token || '').trim().toUpperCase()) {
-            reportViolation("Token Ujian Salah");
-            showNotify("Token ujian salah. Silakan hubungi pengawas.", "error");
-            return;
-        }
-
-        const duration = Math.max(1, Math.min(
-            SECURITY_CONFIG.maxExamDurationMin,
-            Number(x.duration) || 60
-        ));
-        const url = String(x.link || '').trim();
-
-        if (!isValidSecureUrl(url, false)) {
-            showNotify("Link ujian tidak aman/valid. Hubungi admin.", "error");
-            return;
-        }
-
-        activePin = x.pin || specialSettings.pin;
-        createResumeNonce();
-        await startExamEngine(url, x.mapel, duration, x.camera !== false, id);
-    } catch (e) {
-        console.error(e);
-        showNotify("Gagal memverifikasi paket ujian.", "error");
-    }
+async function startExam(id, correctToken) {
+    const tokenInput = document.getElementById(`tk-${id}`).value.toUpperCase(); if (tokenInput !== correctToken) { showNotify("Token salah! Silahkan hubungi pengawas.", "error"); return; }
+    const doc = await publicData.collection('exams').doc(id).get(); if (doc.exists) { const x = doc.data(); activePin = x.pin || specialSettings.pin; startExamEngine(x.link, x.mapel, x.duration, x.camera, id); }
 }
 
 async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
-    await clearClipboard(); 
-    isExamActive = true; 
-    for(let i=0; i<20; i++) {history.pushState(null, null, location.href); }
-    violationCount = 0; 
-    initialWidth = window.innerWidth; 
+    // Simpan referensi awal layar sebelum ujian dimulai.
+    securityBaseline.width = window.innerWidth;
+    securityBaseline.height = window.innerHeight;
+    securityBaseline.orientation = screen.orientation ? screen.orientation.type : null;
+
+    // Coba masuk fullscreen sedini mungkin. Pada Android/PWA keberhasilan
+    // tetap bergantung pada browser dan gesture pengguna.
+    enterExamFullscreen();
+
+    await clearClipboard();
+    isExamActive = true;
+    violationCount = 0;
+    initialWidth = window.innerWidth;
     initialHeight = window.innerHeight;
 
-    const selfVideo = document.getElementById('self-video');
-    const finishBtn = document.getElementById('btn-finish-exam'); // Referensi tombol selesai
+    // History trap dibuat saat ujian dimulai agar tombol Back Android
+    // tidak langsung meninggalkan halaman ujian.
+    for (let i = 0; i < 20; i++) {
+        history.pushState({ exam: true }, null, location.href);
+    }
 
-    // 1. Sembunyikan tombol selesai saat mulai
+    const selfVideo = document.getElementById('self-video');
+    const finishBtn = document.getElementById('btn-finish-exam');
+
     if (finishBtn) finishBtn.classList.add('hidden-element');
 
     // LOGIKA KAMERA
     if (isCameraRequired === false) {
-        if (window.localStream) { window.localStream.getTracks().forEach(t => t.stop()); window.localStream = null; }
-        selfVideo.srcObject = null; selfVideo.parentElement.classList.add('hidden-element');
-    } else { try {const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 120 }, height: { ideal: 90 }, frameRate: { max: 10 } } });
-            window.localStream = stream; selfVideo.srcObject = stream; selfVideo.parentElement.classList.remove('hidden-element'); startStudentBroadcast(); } catch (e) { alert("⚠️ Ujian ini wajib kamera!"); return; }
+        if (window.localStream) {
+            window.localStream.getTracks().forEach(t => t.stop());
+            window.localStream = null;
+        }
+        selfVideo.srcObject = null;
+        selfVideo.parentElement.classList.add('hidden-element');
+    } else {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 120 },
+                    height: { ideal: 90 },
+                    frameRate: { max: 10 }
+                }
+            });
+            window.localStream = stream;
+            selfVideo.srcObject = stream;
+            selfVideo.parentElement.classList.remove('hidden-element');
+            startStudentBroadcast();
+        } catch (e) {
+            isExamActive = false;
+            stopExamSecurity();
+            alert("⚠️ Ujian ini wajib kamera! Kamera tidak dapat digunakan.");
+            return;
+        }
     }
 
     enableHardLockdown();
-    await requestWakeLock();
+    requestExamWakeLock();
+    enterExamFullscreen();
 
-    // 2. LOGIKA WAKTU (Mendukung Refresh Halaman/Resume)
+    // LOGIKA WAKTU (Mendukung Refresh Halaman/Resume)
     let now = Date.now();
     let endTime;
-    if (isResuming) {const savedState = JSON.parse(localStorage.getItem('active_exam_state')); endTime = savedState.endTime;
-    } else {endTime = now + (dur * 60 * 1000); localStorage.setItem('active_exam_state', JSON.stringify(secureExamState({
-            url, mapel, endTime, isCamera: isCameraRequired, examId: examId, originalDur: dur
-        }))); }
-
-    // Hitung waktu mulai asli (untuk mengecek batas 30 menit)
     let startTime;
-    if (isResuming) {const savedState = JSON.parse(localStorage.getItem('active_exam_state'));
-    startTime = savedState.endTime - (savedState.originalDur * 60 * 1000); } else {startTime = now; }
+    let finishButtonMinutes;
+
+    if (isResuming) {
+        const savedState = JSON.parse(localStorage.getItem('active_exam_state'));
+
+        endTime = savedState.endTime;
+        startTime = savedState.startTime ||
+            (savedState.endTime - (savedState.originalDur * 60 * 1000));
+
+        finishButtonMinutes = Number.isFinite(Number(savedState.finishButtonMinutes))
+            ? Math.max(0, Number(savedState.finishButtonMinutes))
+            : 30;
+    } else {
+        endTime = now + (dur * 60 * 1000);
+        startTime = now;
+
+        finishButtonMinutes = Number.isFinite(Number(specialSettings.finishButtonMinutes))
+            ? Math.max(0, Number(specialSettings.finishButtonMinutes))
+            : 30;
+
+        localStorage.setItem('active_exam_state', JSON.stringify({
+            url,
+            mapel,
+            startTime,
+            endTime,
+            isCamera: isCameraRequired,
+            pin: activePin,
+            examId: examId,
+            originalDur: dur,
+            finishButtonMinutes
+        }));
+    }
 
     document.getElementById('view-mapel').textContent = mapel;
-    document.getElementById('exam-frame-container').innerHTML = `<iframe src="${url}" allow="camera; microphone; display-capture" sandbox="allow-forms allow-scripts allow-same-origin allow-modals" class="w-full h-full border-none"></iframe>`;
+
+    // Iframe tetap mengizinkan fungsi yang umum dibutuhkan Google Forms/ujian,
+    // tetapi tidak memberi izin navigasi/top-level popup.
+    const frame = document.createElement('iframe');
+    frame.src = url;
+    frame.allow = "camera; microphone";
+    frame.setAttribute(
+        "sandbox",
+        "allow-forms allow-scripts allow-same-origin allow-modals"
+    );
+    frame.className = "w-full h-full border-none";
+    frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+    frame.setAttribute("allowfullscreen", "true");
+
+    const frameContainer = document.getElementById('exam-frame-container');
+    frameContainer.innerHTML = "";
+    frameContainer.appendChild(frame);
     document.getElementById('exam-viewer').classList.remove('hidden-element');
 
-    // 3. TIMER INTERVAL
+    // TIMER
     if (window.examTimerInterval) clearInterval(window.examTimerInterval);
+
     window.examTimerInterval = setInterval(() => {
         if (!isExamActive) return;
-        let currentTime = Date.now();
-        let timeRemainingMs = endTime - currentTime;
-        let timeRemainingSec = Math.floor(timeRemainingMs / 1000);
 
-        // A. Cek apakah pengerjaan sudah berjalan 30 menit (1800 detik)
-        let secondsElapsed = Math.floor((currentTime - startTime) / 1000);
-        if (secondsElapsed >= 1800) {if (finishBtn) finishBtn.classList.remove('hidden-element');}
+        const currentTime = Date.now();
+        const timeRemainingMs = endTime - currentTime;
+        const timeRemainingSec = Math.floor(timeRemainingMs / 1000);
 
-        // B. Cek apakah waktu habis
-        if (timeRemainingSec <= 0) {clearInterval(window.examTimerInterval); finishExam(); alert("Waktu Habis!"); return; }
+        // Tombol Selesai mengikuti Master Setting.
+        const secondsElapsed = Math.floor((currentTime - startTime) / 1000);
+        const finishDelaySeconds = finishButtonMinutes * 60;
 
-        // C. Update Tampilan Timer
-        let m = String(Math.floor(timeRemainingSec / 60)).padStart(2, '0'); let s = String(timeRemainingSec % 60).padStart(2, '0');
-        document.getElementById('exam-timer').textContent = `${m}:${s}`; 
+        if (secondsElapsed >= finishDelaySeconds && finishBtn) {
+            finishBtn.classList.remove('hidden-element');
+        }
 
+        if (timeRemainingSec <= 0) {
+            clearInterval(window.examTimerInterval);
+            window.examTimerInterval = null;
+            finishExam();
+            return;
+        }
+
+        const m = String(Math.floor(timeRemainingSec / 60)).padStart(2, '0');
+        const s = String(timeRemainingSec % 60).padStart(2, '0');
+        const timer = document.getElementById('exam-timer');
+        if (timer) timer.textContent = `${m}:${s}`;
     }, 1000);
-    // Reset status resume setelah engine berjalan
+
     isResuming = false;
 }
 
 async function finishExam() {
     isExamActive = false;
-    // 1. Hentikan semua interval
-    if (window.examTimerInterval) clearInterval(window.examTimerInterval);
+
+    stopExamSecurity();
+
+    if (window.examTimerInterval) {
+        clearInterval(window.examTimerInterval);
+        window.examTimerInterval = null;
+    }
     if (monitorInterval) clearInterval(monitorInterval);
     if (studentSnapshotInterval) clearInterval(studentSnapshotInterval);
 
-    // 2. Matikan Kamera secara total
-    if (window.localStream) { window.localStream.getTracks().forEach(track => { track.stop(); track.enabled = false; }); window.localStream = null; }
-
-    // 3. Putuskan koneksi PeerJS
-    if (myPeer) { myPeer.destroy(); myPeer = null; }
-
-    // 4. Hapus data di database & LocalStorage
-    localStorage.removeItem('active_exam_state');
-    if (user?.id) {
-        try {await db.from('live').delete().eq('id', user.id);
-            // Kirim sinyal terakhir ke admin bahwa kita offline
-            monitorChannel.send({ type: 'broadcast', event: 'remove-card', payload: { userId: user.id.replace(/[^a-zA-Z0-9]/g, '') } });
-        } catch (e) { console.warn("Cleanup DB failed"); }
+    // Matikan kamera total.
+    if (window.localStream) {
+        window.localStream.getTracks().forEach(track => {
+            track.stop();
+            track.enabled = false;
+        });
+        window.localStream = null;
     }
-    await releaseWakeLock();
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    alert("Ujian selesai! Pastikan jawaban anda sudah terkirim."); location.reload();
+
+    if (myPeer) {
+        myPeer.destroy();
+        myPeer = null;
+    }
+
+    localStorage.removeItem('active_exam_state');
+
+    if (user?.id) {
+        try {
+            await db.from('live').delete().eq('id', user.id);
+            if (monitorChannel) {
+                monitorChannel.send({
+                    type: 'broadcast',
+                    event: 'remove-card',
+                    payload: {
+                        userId: user.id.replace(/[^a-zA-Z0-9]/g, '')
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn("Cleanup DB failed");
+        }
+    }
+
+    if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+    }
+
+    alert("Ujian selesai! Pastikan jawaban Anda sudah terkirim.");
+    location.reload();
 }
 
 function confirmFinishExam() {
-    const inputPin = prompt("Masukkan PIN Pengawas untuk mengakhiri ujian:"); if (inputPin === null) return; // Jika menekan cancel
-    // Cek apakah PIN cocok dengan PIN Paket Ujian yang sedang aktif
+    const inputPin = prompt("Masukkan PIN Pengawas untuk mengakhiri ujian:");
+    if (inputPin === null) return;
+
     if (inputPin === activePin) {
-        if (confirm("PIN Benar. Apakah Anda yakin ingin mengakhiri ujian sekarang?")) finishExam();
-    } else { showNotify("PIN SALAH! Ujian tidak dapat diakhiri tanpa izin pengawas.", "error");
-        // Laporkan ke admin jika ada percobaan mematikan ujian secara paksa
+        if (confirm("PIN Benar. Apakah Anda yakin ingin mengakhiri ujian sekarang?")) {
+            finishExam();
+        }
+    } else {
+        showNotify("PIN SALAH! Ujian tidak dapat diakhiri tanpa izin pengawas.", "error");
         reportViolation("Mencoba Keluar Ujian (PIN Salah)");
     }
 }
@@ -1727,94 +1616,362 @@ async function clearClipboard() {
     }
 }
 
-let isSecuritySetup = false, blurTimer = null; 
+let isSecuritySetup = false, blurTimer = null;
+let examSecurityHandlers = null;
+let examWakeLock = null;
+let lastVisibilityViolation = 0;
+let lastFullscreenViolation = 0;
+let securityBaseline = { width: 0, height: 0, orientation: null };
+
+function isLockScreenVisible() {
+    const lock = document.getElementById('lock-screen');
+    return lock && !lock.classList.contains('hidden-element');
+}
+
+function reportSecurityViolationOnce(key, reason, cooldown = 5000) {
+    if (!isExamActive || isLockScreenVisible()) return;
+
+    const now = Date.now();
+    if (!window._securityViolationTimes) window._securityViolationTimes = {};
+
+    const previous = window._securityViolationTimes[key] || 0;
+    if (now - previous < cooldown) return;
+
+    window._securityViolationTimes[key] = now;
+    reportViolation(reason);
+}
+
+async function enterExamFullscreen() {
+    if (!isExamActive && document.getElementById('exam-viewer')?.classList.contains('hidden-element')) {
+        return false;
+    }
+
+    if (document.fullscreenElement) return true;
+
+    try {
+        if (document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen({ navigationUI: "hide" });
+            return true;
+        }
+    } catch (e) {
+        console.warn("Fullscreen tidak tersedia/ditolak browser:", e);
+    }
+
+    return false;
+}
+
+async function requestExamWakeLock() {
+    if (!isExamActive || !('wakeLock' in navigator)) return;
+
+    try {
+        if (!examWakeLock || examWakeLock.released) {
+            examWakeLock = await navigator.wakeLock.request('screen');
+
+            examWakeLock.addEventListener('release', () => {
+                examWakeLock = null;
+            });
+        }
+    } catch (e) {
+        console.warn("Wake Lock tidak tersedia:", e);
+    }
+}
+
+function stopExamSecurity() {
+    if (blurTimer) {
+        clearTimeout(blurTimer);
+        blurTimer = null;
+    }
+
+    if (examSecurityHandlers) {
+        window.removeEventListener('resize', examSecurityHandlers.resize);
+        window.removeEventListener('blur', examSecurityHandlers.blur);
+        window.removeEventListener('focus', examSecurityHandlers.focus);
+        window.removeEventListener('orientationchange', examSecurityHandlers.orientation);
+        window.removeEventListener('pagehide', examSecurityHandlers.pagehide);
+        document.removeEventListener('visibilitychange', examSecurityHandlers.visibility);
+        document.removeEventListener('fullscreenchange', examSecurityHandlers.fullscreen);
+        document.removeEventListener('copy', examSecurityHandlers.copy);
+        document.removeEventListener('cut', examSecurityHandlers.cut);
+        document.removeEventListener('paste', examSecurityHandlers.paste);
+        document.removeEventListener('contextmenu', examSecurityHandlers.contextmenu);
+        document.removeEventListener('selectstart', examSecurityHandlers.selectstart);
+        document.removeEventListener('dragstart', examSecurityHandlers.dragstart);
+        document.removeEventListener('touchmove', examSecurityHandlers.touchmove);
+
+        examSecurityHandlers = null;
+    }
+
+    window.onpopstate = null;
+    window.onkeydown = null;
+    document.body.style.webkitUserSelect = "";
+    document.body.style.userSelect = "";
+
+    if (examWakeLock) {
+        examWakeLock.release().catch(() => {});
+        examWakeLock = null;
+    }
+}
+
 function enableHardLockdown() {
-    if (isSecuritySetup) return;
+    // Bersihkan handler ujian sebelumnya jika ada.
+    stopExamSecurity();
 
     for (let i = 0; i < 20; i++) {
         history.pushState({ exam: true }, null, location.href);
     }
-    window.onpopstate = () => history.pushState({ exam: true }, null, location.href);
 
-    document.oncontextmenu = e => { e.preventDefault(); return false; };
-    document.body.style.webkitUserSelect = "none";
-    document.body.style.webkitTouchCallout = "none";
+    const handlers = {};
 
-    const blockedKeys = new Set([
-        'F12', 'F11', 'PrintScreen', 'ContextMenu'
-    ]);
+    // Tombol BACK Android / browser.
+    window.onpopstate = () => {
+        if (!isExamActive) return;
+        history.pushState({ exam: true }, null, location.href);
+        reportSecurityViolationOnce(
+            "back",
+            "Mencoba Kembali / Keluar dari Ujian",
+            4000
+        );
+    };
 
+    // Keyboard fisik / Chromebook / desktop fallback.
     window.onkeydown = (e) => {
         if (!isExamActive) return;
 
-        const k = String(e.key || '');
-        const lower = k.toLowerCase();
-        const ctrlOrMeta = e.ctrlKey || e.metaKey;
+        const key = (e.key || "").toLowerCase();
+        const blocked =
+            e.key === "F11" ||
+            e.key === "F12" ||
+            e.key === "Escape" ||
+            (e.ctrlKey && ["u", "s", "p", "c", "v", "x"].includes(key)) ||
+            (e.ctrlKey && e.shiftKey && ["i", "j", "c"].includes(key)) ||
+            (e.metaKey && ["c", "v", "x", "s", "p"].includes(key));
 
-        if (
-            blockedKeys.has(k) ||
-            (ctrlOrMeta && ['u','s','p','c','v','x','a'].includes(lower)) ||
-            (e.ctrlKey && e.shiftKey && ['i','j','c'].includes(lower)) ||
-            (e.altKey && ['tab','arrowleft','arrowright'].includes(lower))
-        ) {
+        if (blocked) {
             e.preventDefault();
             e.stopPropagation();
-            reportViolation("Shortcut/Perintah Sistem Terlarang");
+            reportSecurityViolationOnce("keyboard-" + key, "Shortcut Terlarang", 3000);
             return false;
         }
     };
 
-    ['copy','cut','paste','dragstart','drop'].forEach(evt => {
-        window.addEventListener(evt, e => {
-            if (isExamActive) {
-                e.preventDefault();
-                reportViolation("Aksi Clipboard/Drag Terlarang");
-            }
-        }, true);
-    });
-
-    document.addEventListener('visibilitychange', () => {
-        if (isExamActive && document.visibilityState === 'hidden') {
-            reportViolation("Halaman Tidak Terlihat");
-        }
-    });
-
-    window.onblur = () => {
+    // Blokir menu konteks, copy, cut, paste, select dan drag.
+    handlers.contextmenu = (e) => {
         if (!isExamActive) return;
+        e.preventDefault();
+        reportSecurityViolationOnce("contextmenu", "Mencoba Membuka Menu Konteks", 5000);
+    };
+
+    handlers.copy = (e) => {
+        if (!isExamActive) return;
+        e.preventDefault();
+        reportSecurityViolationOnce("copy", "Mencoba Menyalin Teks", 5000);
+    };
+
+    handlers.cut = (e) => {
+        if (!isExamActive) return;
+        e.preventDefault();
+        reportSecurityViolationOnce("cut", "Mencoba Memotong Teks", 5000);
+    };
+
+    handlers.paste = (e) => {
+        if (!isExamActive) return;
+        e.preventDefault();
+        reportSecurityViolationOnce("paste", "Mencoba Menempelkan Data", 5000);
+    };
+
+    handlers.selectstart = (e) => {
+        if (!isExamActive) return;
+        e.preventDefault();
+    };
+
+    handlers.dragstart = (e) => {
+        if (!isExamActive) return;
+        e.preventDefault();
+    };
+
+    // Jangan menghentikan touchmove normal karena itu bisa merusak scrolling
+    // di Google Forms. Handler hanya mencatat jika browser melaporkan pola
+    // pinch/gesture yang tidak normal.
+    handlers.touchmove = (e) => {
+        if (!isExamActive) return;
+        if (e.touches && e.touches.length > 1) {
+            reportSecurityViolationOnce(
+                "multi-touch",
+                "Gesture Multi-Touch Terdeteksi",
+                5000
+            );
+        }
+    };
+
+    // Android app-switch / Home / Recent Apps / notification shade:
+    // visibilitychange adalah sinyal web yang paling berguna.
+    handlers.visibility = () => {
+        if (!isExamActive) return;
+
+        if (document.visibilityState === "hidden") {
+            lastVisibilityViolation = Date.now();
+            reportSecurityViolationOnce(
+                "visibility-hidden",
+                "Meninggalkan Layar Ujian / Beralih Aplikasi",
+                3000
+            );
+            return;
+        }
+
+        // Saat kembali ke PWA: minta fullscreen dan wake lock lagi.
+        setTimeout(() => {
+            if (!isExamActive) return;
+            enterExamFullscreen();
+            requestExamWakeLock();
+        }, 250);
+    };
+
+    // Blur sebagai sinyal tambahan. Tidak langsung menghukum agar tidak
+    // mudah false-positive dari keyboard/browser.
+    handlers.blur = () => {
+        if (!isExamActive) return;
+
+        if (blurTimer) clearTimeout(blurTimer);
+
         blurTimer = setTimeout(() => {
-            if (document.visibilityState === 'visible') {
-                reportViolation("Kehilangan Fokus Layar");
-            }
+            if (!isExamActive) return;
+
+            // Jika halaman memang hidden, visibilitychange sudah mencatatnya.
+            if (document.visibilityState === "hidden") return;
+
+            reportSecurityViolationOnce(
+                "blur",
+                "Kehilangan Fokus Layar",
+                5000
+            );
         }, 1200);
     };
 
-    window.onfocus = () => {
+    handlers.focus = () => {
         if (blurTimer) {
             clearTimeout(blurTimer);
             blurTimer = null;
         }
+
+        if (isExamActive) {
+            enterExamFullscreen();
+            requestExamWakeLock();
+        }
     };
 
-    window.addEventListener('resize', () => {
+    // Split-screen / resize Android.
+    handlers.resize = () => {
         if (!isExamActive) return;
 
-        const widthDiff = Math.abs(window.innerWidth - initialWidth);
-        const isTooSmall = window.innerHeight < (initialHeight * 0.65);
         const active = document.activeElement;
-        const isInputActive = active && ['INPUT', 'TEXTAREA'].includes(active.tagName);
+        const inputActive =
+            active &&
+            ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName);
 
+        const widthDiff = Math.abs(window.innerWidth - initialWidth);
+        const heightRatio = initialHeight > 0
+            ? window.innerHeight / initialHeight
+            : 1;
+
+        // Keyboard Android sering membuat tinggi viewport mengecil.
+        // Karena itu deteksi tinggi hanya dilakukan bila tidak ada input aktif.
         if (widthDiff > 100) {
-            reportViolation("Layar Terbagi / Perubahan Ukuran Layar");
+            reportSecurityViolationOnce(
+                "split-width",
+                "Layar Terbagi / Split Screen Terdeteksi",
+                5000
+            );
             initialWidth = window.innerWidth;
         }
-        if (isTooSmall && !isInputActive) {
-            reportViolation("Deteksi Layar Kecil / Split Screen");
+
+        if (heightRatio < 0.65 && !inputActive && document.visibilityState === "visible") {
+            reportSecurityViolationOnce(
+                "split-height",
+                "Ukuran Layar Berubah Drastis / Split Screen",
+                5000
+            );
         }
-    });
+    };
 
+    handlers.orientation = () => {
+        if (!isExamActive) return;
+
+        setTimeout(() => {
+            if (!isExamActive) return;
+
+            const current = screen.orientation
+                ? screen.orientation.type
+                : null;
+
+            if (
+                securityBaseline.orientation &&
+                current &&
+                current !== securityBaseline.orientation
+            ) {
+                reportSecurityViolationOnce(
+                    "orientation",
+                    "Orientasi Layar Berubah Saat Ujian",
+                    5000
+                );
+            }
+        }, 500);
+    };
+
+    // pagehide bukan pengganti visibilitychange, tetapi berguna sebagai
+    // sinyal tambahan ketika halaman ditinggalkan.
+    handlers.pagehide = () => {
+        if (!isExamActive) return;
+        reportSecurityViolationOnce(
+            "pagehide",
+            "Halaman Ujian Meninggalkan Layar",
+            5000
+        );
+    };
+
+    handlers.fullscreen = () => {
+        if (!isExamActive) return;
+
+        if (!document.fullscreenElement) {
+            const now = Date.now();
+            if (now - lastFullscreenViolation < 2500) return;
+
+            lastFullscreenViolation = now;
+            reportViolation("Keluar dari Mode Layar Penuh");
+
+            // Minta kembali fullscreen setelah UI browser stabil.
+            setTimeout(() => {
+                if (isExamActive) enterExamFullscreen();
+            }, 500);
+        }
+    };
+
+    document.addEventListener('contextmenu', handlers.contextmenu, true);
+    document.addEventListener('copy', handlers.copy, true);
+    document.addEventListener('cut', handlers.cut, true);
+    document.addEventListener('paste', handlers.paste, true);
+    document.addEventListener('selectstart', handlers.selectstart, true);
+    document.addEventListener('dragstart', handlers.dragstart, true);
+    document.addEventListener('touchmove', handlers.touchmove, { passive: true });
+
+    document.addEventListener('visibilitychange', handlers.visibility);
+    document.addEventListener('fullscreenchange', handlers.fullscreen);
+
+    window.addEventListener('resize', handlers.resize);
+    window.addEventListener('blur', handlers.blur);
+    window.addEventListener('focus', handlers.focus);
+    window.addEventListener('orientationchange', handlers.orientation);
+    window.addEventListener('pagehide', handlers.pagehide);
+
+    examSecurityHandlers = handlers;
     isSecuritySetup = true;
-}
 
+    document.body.style.webkitUserSelect = "none";
+    document.body.style.userSelect = "none";
+
+    // Minta kembali fullscreen dan menjaga layar tetap menyala.
+    enterExamFullscreen();
+    requestExamWakeLock();
+}
 
 function initPeerConnection() {
     // Pastikan ID disanitasi sama persis dengan yang dicari Admin
@@ -2345,10 +2502,6 @@ async function generateAISoal() {
     const loader = document.getElementById('ai-loading');
 
     if (!topic) return alert("Isi topik!");
-    if (!apiKey) {
-        showNotify("Fitur AI dinonaktifkan pada versi aman. Hubungkan ke Supabase Edge Function/server-side AI agar API key tidak bocor.", "error");
-        return;
-    }
     
     btn.classList.add('hidden-element');
     loader.classList.remove('hidden-element');
@@ -2395,22 +2548,16 @@ async function generateAISoal() {
 
 // --- J. PENGATURAN AKHIR ---
 window.onbeforeunload = function() { if (isExamActive) return "Sedang Ujian!"; };
-window.addEventListener('pagehide', () => {
-    if (isExamActive) {
-        try { reportViolation("Halaman ditinggalkan"); } catch (_) {}
-    }
-});
 
-document.addEventListener('fullscreenchange', () => {
-    if (isExamActive && !document.fullscreenElement) { 
-        // Siswa keluar dari fullscreen di HP
-        reportViolation("Keluar dari Mode Layar Penuh"); 
-        // Munculkan modal perintah untuk masuk fullscreen lagi
-        alert("PERINGATAN: Jangan keluar dari mode Fullscreen atau ujian akan terkunci!");
-        // Paksa masuk lagi
-        setTimeout(() => { document.documentElement.requestFullscreen().catch(() => {}); }, 1000); }
-});
-
+// PWA: daftarkan service worker. Ini membantu install/offline app shell,
+// tetapi TIDAK memberi Android-level kiosk/lock-task.
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => {
+            console.warn('Service Worker tidak aktif:', err);
+        });
+    });
+}
 
 window.addEventListener('error', (event) => { console.warn('System Note:', event.message); });
 window.addEventListener('unhandledrejection', (event) => { console.warn('Promise Note:', event.reason); });
