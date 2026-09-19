@@ -138,6 +138,13 @@
     }
 </style>
 
+
+<!-- SECURITY NOTICE:
+     Client-side anti-cheat is only a deterrent. Do not trust localStorage,
+     JavaScript variables, tokens, PINs, or browser events as authoritative.
+     Use Supabase Auth + RLS + Edge Functions for authorization and exam state.
+-->
+
 </head>
 
 <body class="text-slate-800" oncontextmenu="return false">
@@ -764,7 +771,7 @@
     <script>
 
 // --- A. SETUP CONFIGURATION & SUPABASE ---
-const apiKey = "AIzaSyBrpMLLakAoM5HIL0Vax91OI0wX371Bgxc";
+const apiKey = ""; // SECURITY: jangan taruh API key Gemini di HTML/browser.
 const SUPABASE_URL = "https://yeukammxkbatyldqbtzy.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlldWthbW14a2JhdHlsZHFidHp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5OTk0OTEsImV4cCI6MjA5NDU3NTQ5MX0.RVvEVGhknsaqpsJjqom9Kawum31MkOb22aM7CHvLLgk";
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
@@ -773,6 +780,125 @@ const publicData = createCollectionWrapper(db);
 const appId = 'exambro-system-2026';
 const monitorChannel = db.channel('exam-monitoring', {config: { broadcast: { self: false, ack: false } } }); monitorChannel.subscribe();
 const isLocalFileOrigin = window.location.protocol === 'file:' || window.location.origin === 'null';
+
+// ================================================================
+// EXAMBRO SECURITY HARDENING 2026
+// Catatan: proteksi browser hanya lapisan tambahan.
+// Keamanan otoritatif tetap harus ditegakkan di server/Supabase RLS.
+// ================================================================
+const SECURITY_CONFIG = {
+    sessionMaxAgeMs: 8 * 60 * 60 * 1000,
+    maxLoginAttempts: 5,
+    loginLockMs: 10 * 60 * 1000,
+    maxExamDurationMin: 240,
+    allowedExamProtocols: ['https:'],
+    allowedManualHosts: ['docs.google.com', 'forms.google.com', 'forms.gle']
+};
+
+function securityNow() { return Date.now(); }
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;'
+    }[ch]));
+}
+
+function isValidSecureUrl(rawUrl, allowManual = false) {
+    try {
+        const u = new URL(String(rawUrl || '').trim());
+        if (!SECURITY_CONFIG.allowedExamProtocols.includes(u.protocol)) return false;
+        if (!allowManual) return true;
+        const host = u.hostname.toLowerCase();
+        return SECURITY_CONFIG.allowedManualHosts.some(h => host === h || host.endsWith('.' + h));
+    } catch (_) {
+        return false;
+    }
+}
+
+function getLoginThrottleKey() {
+    const role = currentRole === 'admin' ? 'admin' : 'student';
+    const id = currentRole === 'admin'
+        ? (document.getElementById('user-id')?.value || 'admin')
+        : (document.getElementById('select-nama')?.value || 'student');
+    return `exambro_login_throttle_${role}_${id}`;
+}
+
+function loginThrottleBlocked() {
+    try {
+        const raw = localStorage.getItem(getLoginThrottleKey());
+        if (!raw) return false;
+        const d = JSON.parse(raw);
+        if (d.lockUntil && securityNow() < d.lockUntil) return true;
+        return false;
+    } catch (_) { return false; }
+}
+
+function recordLoginFailure() {
+    try {
+        const key = getLoginThrottleKey();
+        const d = JSON.parse(localStorage.getItem(key) || '{"count":0}');
+        d.count = (d.count || 0) + 1;
+        if (d.count >= SECURITY_CONFIG.maxLoginAttempts) {
+            d.lockUntil = securityNow() + SECURITY_CONFIG.loginLockMs;
+        }
+        localStorage.setItem(key, JSON.stringify(d));
+    } catch (_) {}
+}
+
+function clearLoginFailures() {
+    try { localStorage.removeItem(getLoginThrottleKey()); } catch (_) {}
+}
+
+function validateStoredSession(sessionData) {
+    if (!sessionData || !sessionData.time) return false;
+    return (securityNow() - Number(sessionData.time)) <= SECURITY_CONFIG.sessionMaxAgeMs;
+}
+
+function clearClientSession() {
+    localStorage.removeItem('exambro_session');
+    localStorage.removeItem('active_exam_state');
+    sessionStorage.removeItem('exambro_resume_nonce');
+}
+
+function createResumeNonce() {
+    const nonce = (crypto.randomUUID ? crypto.randomUUID() : `${securityNow()}-${Math.random()}`);
+    sessionStorage.setItem('exambro_resume_nonce', nonce);
+    return nonce;
+}
+
+function getResumeNonce() {
+    return sessionStorage.getItem('exambro_resume_nonce');
+}
+
+function secureExamState(state) {
+    return {
+        url: state.url,
+        mapel: state.mapel,
+        endTime: Number(state.endTime),
+        isCamera: !!state.isCamera,
+        examId: state.examId || null,
+        originalDur: Number(state.originalDur || 0),
+        resumeNonce: getResumeNonce()
+    };
+}
+
+async function requestWakeLock() {
+    try {
+        if ('wakeLock' in navigator && !window.examWakeLock) {
+            window.examWakeLock = await navigator.wakeLock.request('screen');
+        }
+    } catch (_) {}
+}
+
+async function releaseWakeLock() {
+    try {
+        if (window.examWakeLock) {
+            await window.examWakeLock.release();
+            window.examWakeLock = null;
+        }
+    } catch (_) {}
+}
+
 
 function showStartupError(message) {
     console.error('Startup Error:', message); const existing = document.getElementById('startup-error-banner'); if (existing) existing.remove();
@@ -893,9 +1019,39 @@ window.onload = async () => {
     try { if (!await checkSupabaseConnection()) return; document.getElementById('loading-overlay').classList.add('hidden-element');
     // 1. CEK SESSION LOGIN
     let sessionData = null; const savedSession = localStorage.getItem('exambro_session');
-        if (savedSession) { sessionData = JSON.parse(savedSession);
-            if (sessionData.role === 'admin') { user = { id: 'admin', nama: 'Administrator' }; currentRole = 'admin'; setRole('admin'); showPage('admin-page'); syncAdminData(); initAdminPeer(); startMonitorFeed();
-            } else if (sessionData.role === 'student' && sessionData.user) { user = sessionData.user; currentRole = 'student'; setRole('student'); document.getElementById('display-std-name').textContent = user.nama; showPage('student-page'); syncStudentData(); listenForAdminCommands(); }
+        if (savedSession) {
+            try {
+                sessionData = JSON.parse(savedSession);
+                if (!validateStoredSession(sessionData)) {
+                    clearClientSession();
+                    sessionData = null;
+                } else if (sessionData.role === 'admin') {
+                    const auth = await supabaseClient.auth.getUser();
+                    if (auth.data?.user) {
+                        user = { id: auth.data.user.id, nama: auth.data.user.email || "Administrator", email: auth.data.user.email };
+                        currentRole = 'admin';
+                        setRole('admin');
+                        showPage('admin-page');
+                        syncAdminData();
+                        initAdminPeer();
+                        startMonitorFeed();
+                    } else {
+                        clearClientSession();
+                        sessionData = null;
+                    }
+                } else if (sessionData.role === 'student' && sessionData.user?.id) {
+                    user = sessionData.user;
+                    currentRole = 'student';
+                    setRole('student');
+                    document.getElementById('display-std-name').textContent = user.nama;
+                    showPage('student-page');
+                    syncStudentData();
+                    listenForAdminCommands();
+                }
+            } catch (_) {
+                clearClientSession();
+                sessionData = null;
+            }
         }
         // 2. LOGIKA AUTO-RESUME UJIAN
         const activeExam = localStorage.getItem('active_exam_state');
@@ -910,30 +1066,119 @@ window.onload = async () => {
 
 // --- B. AUTHENTICATION & ROLE MANAGEMENT ---
 async function handleLogin() {
-    const pwdInput = document.getElementById('user-pwd'), pwd = pwdInput.value, userIdInput = document.getElementById('user-id'), selectNamaInput = document.getElementById('select-nama'), loginBtn = document.querySelector('button[onclick="handleLogin()"]');
-    if (!pwd) {showNotify("Password wajib diisi!","error"); return; }
-    loginBtn.disabled = true; loginBtn.innerHTML = "Memverifikasi...";
+    const pwdInput = document.getElementById('user-pwd');
+    const pwd = pwdInput.value;
+    const userIdInput = document.getElementById('user-id');
+    const selectNamaInput = document.getElementById('select-nama');
+    const loginBtn = document.querySelector('button[onclick="handleLogin()"]');
+
+    if (loginThrottleBlocked()) {
+        showNotify("Terlalu banyak percobaan login. Silakan tunggu beberapa menit.", "error");
+        return;
+    }
+    if (!pwd) { showNotify("Password wajib diisi!", "error"); return; }
+
+    loginBtn.disabled = true;
+    loginBtn.innerHTML = "Memverifikasi...";
+
     try {
         if (currentRole === 'admin') {
-            if (userIdInput.value === 'admin' && pwd === 'admin123') { 
-                user = { id: 'admin', nama: 'Administrator' }; currentRole = 'admin'; setRole('admin'); 
-                localStorage.setItem('exambro_session', JSON.stringify({ role: 'admin', user, time: Date.now() })); 
-                showPage('admin-page'); syncAdminData(); initAdminPeer(); startMonitorFeed();
-            } else { showNotify("Username Admin atau Password Salah!", "error"); }
+            // IMPORTANT: password admin statis di HTML telah dinonaktifkan.
+            // Gunakan Supabase Auth untuk akun admin.
+            const email = userIdInput.value.trim();
+            if (!email || !email.includes('@')) {
+                recordLoginFailure();
+                showNotify("Admin harus login menggunakan email akun Supabase.", "error");
+                return;
+            }
+
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
+                email, password: pwd
+            });
+            if (error || !data?.user) {
+                recordLoginFailure();
+                showNotify("Email atau password admin salah.", "error");
+                return;
+            }
+
+            clearLoginFailures();
+            user = { id: data.user.id, nama: data.user.email || "Administrator", email: data.user.email };
+            currentRole = 'admin';
+            setRole('admin');
+            localStorage.setItem('exambro_session', JSON.stringify({
+                role: 'admin', user, time: securityNow()
+            }));
+            showPage('admin-page');
+            syncAdminData();
+            initAdminPeer();
+            startMonitorFeed();
         } else {
-            const userId = selectNamaInput.value; if (!userId) { showNotify("Silahkan pilih nama Anda!", "error"); loginBtn.disabled = false; loginBtn.innerHTML = "MASUK SISTEM"; return; }
-            const selectedText = selectNamaInput.options[selectNamaInput.selectedIndex].text, doc = await publicData.collection('users').doc(userId).get();
-            if (doc.exists) { 
-                const userData = doc.data();
-                if (userData.pwd.toString() === pwd.toString()) { 
-                    user = { id: doc.id, nama: selectedText, kelas: userData.kelas, nis: userData.nis }; currentRole = 'student'; setRole('student'); 
-                    localStorage.setItem('exambro_session', JSON.stringify({ role: 'student', user: user, time: Date.now() })); 
-                    document.getElementById('display-std-name').textContent = user.nama; showPage('student-page'); syncStudentData(); listenForAdminCommands();
-                } else { showNotify("Password Siswa Salah!", "error");; }
-            } else { showNotify("Data tidak ditemukan!", "error"); }
+            const userId = selectNamaInput.value;
+            if (!userId) {
+                showNotify("Silakan pilih nama Anda!", "error");
+                return;
+            }
+
+            const doc = await publicData.collection('users').doc(userId).get();
+            if (!doc.exists) {
+                recordLoginFailure();
+                showNotify("Data siswa tidak ditemukan.", "error");
+                return;
+            }
+
+            const userData = doc.data();
+            const storedPassword = userData.pwd_hash || userData.password_hash || null;
+
+            // Migrasi aman: akun lama masih bisa login, tetapi sebaiknya segera
+            // dimigrasikan ke pwd_hash melalui backend/Edge Function.
+            let passwordOk = false;
+            if (storedPassword) {
+                const digest = await crypto.subtle.digest(
+                    'SHA-256',
+                    new TextEncoder().encode(pwd)
+                );
+                const hash = Array.from(new Uint8Array(digest))
+                    .map(b => b.toString(16).padStart(2, '0')).join('');
+                passwordOk = hash === String(storedPassword).toLowerCase();
+            } else {
+                // Kompatibilitas sementara untuk database lama.
+                passwordOk = String(userData.pwd ?? '') === String(pwd);
+            }
+
+            if (!passwordOk) {
+                recordLoginFailure();
+                showNotify("Password siswa salah.", "error");
+                return;
+            }
+
+            clearLoginFailures();
+            const selectedText = selectNamaInput.options[selectNamaInput.selectedIndex].text;
+            user = {
+                id: doc.id,
+                nama: selectedText,
+                kelas: userData.kelas,
+                nis: userData.nis
+            };
+            currentRole = 'student';
+            setRole('student');
+
+            // Session hanya menyimpan identitas, bukan password.
+            localStorage.setItem('exambro_session', JSON.stringify({
+                role: 'student', user, time: securityNow()
+            }));
+
+            document.getElementById('display-std-name').textContent = user.nama;
+            showPage('student-page');
+            syncStudentData();
+            listenForAdminCommands();
         }
-    } catch (error) { console.error(error); alert("Gangguan Koneksi: " + error.message); }
-    finally { loginBtn.disabled = false; loginBtn.innerHTML = "MASUK SISTEM"; }
+    } catch (error) {
+        console.error(error);
+        showNotify("Gangguan koneksi. Silakan coba lagi.", "error");
+    } finally {
+        loginBtn.disabled = false;
+        loginBtn.innerHTML = "MASUK SISTEM";
+    }
 }
 
 async function logout() {
@@ -942,7 +1187,9 @@ async function logout() {
             if (user && user.id) await db.from('live').delete().eq('id', user.id);
             if (myPeer) myPeer.destroy(); // MATIKAN PEERJS
         } catch (e) { console.log("Clean up skip"); }
-        localStorage.removeItem('exambro_session'); 
+        clearClientSession();
+        try { await supabaseClient.auth.signOut(); } catch (_) {}
+        await releaseWakeLock();
         location.reload(); 
     }
 }
@@ -1206,10 +1453,10 @@ async function syncAdminStudentData() {
             
             data.forEach(s => {
                 list.innerHTML += `<tr class="hover:bg-slate-50 transition-colors">
-                    <td class="px-8 py-4 text-[11px] font-bold text-slate-600">${s.nis}</td>
-                    <td class="px-8 py-4 text-[11px] font-bold text-slate-900">${s.nama}</td>
-                    <td class="px-8 py-4"><span class="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[9px] font-black uppercase">${s.kelas}</span></td>
-                    <td class="px-8 py-4 text-[11px] font-mono text-slate-400">${s.pwd}</td>
+                    <td class="px-8 py-4 text-[11px] font-bold text-slate-600">${escapeHtml(s.nis)}</td>
+                    <td class="px-8 py-4 text-[11px] font-bold text-slate-900">${escapeHtml(s.nama)}</td>
+                    <td class="px-8 py-4"><span class="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[9px] font-black uppercase">${escapeHtml(s.kelas)}</span></td>
+                    <td class="px-8 py-4 text-[11px] font-mono text-slate-400">••••••••</td>
                 </tr>`;
             });
         }
@@ -1278,7 +1525,7 @@ async function syncStudentData() {
                         </div>
                         <div class="mt-auto space-y-1.5">
                             <input type="text" id="tk-${x.id}" class="w-full bg-slate-50 p-2 rounded-lg text-center font-black text-[10px] outline-none border border-transparent focus:border-indigo-400 transition-all uppercase tracking-[0.2em]" placeholder="TOKEN">
-                            <button onclick="startExam('${x.id}', '${x.token}')" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-black text-[10px] shadow-md active:scale-95 transition-all uppercase">MULAI</button>
+                            <button onclick="startExam('${x.id}')" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-black text-[10px] shadow-md active:scale-95 transition-all uppercase">MULAI</button>
                         </div>
                     </div>`;
                 list.insertAdjacentHTML('beforeend', cardHtml);
@@ -1308,20 +1555,67 @@ function logActivity(a) {
 let html5QrScanner = null;
 function simulateScan() {
     switchStudentView('qr'); html5QrScanner = new Html5Qrcode("qr-reader");
-    html5QrScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, async (decodedText) => { const scannedUrl = decodedText.trim(); if (scannedUrl.startsWith("http")) { await html5QrScanner.stop(); activePin = specialSettings.pin || "1234"; startExamEngine(scannedUrl, "Akses Via Scan QR", specialSettings.duration || 60, true); } else { alert("QR Code bukan berisi link valid!"); } }).catch(err => { alert("Kamera Error: " + err); stopQR(); });
+    html5QrScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, async (decodedText) => { const scannedUrl = decodedText.trim(); if (isValidSecureUrl(scannedUrl, true)) { await html5QrScanner.stop(); activePin = specialSettings.pin || "1234"; createResumeNonce(); startExamEngine(scannedUrl, "Akses Via Scan QR", Math.min(SECURITY_CONFIG.maxExamDurationMin, specialSettings.duration || 60), true); } else { alert("QR hanya boleh berisi link HTTPS dari domain ujian yang diizinkan."); } }).catch(err => { alert("Kamera Error: " + err); stopQR(); });
 }
 async function stopQR() { if (html5QrScanner) { try { await html5QrScanner.stop(); } catch (e) {} } switchStudentView('scheduled'); }       
 
 function startManualExam() {
     const url = document.getElementById('manual-url').value.trim();
-    if (!url) { alert("Mohon tempelkan link ujian anda!"); return; } if (!url.startsWith("http")) { alert("Link tidak valid! Pastikan diawali dengan http:// atau https://"); return; }
+    if (!url) { alert("Mohon tempelkan link ujian anda!"); return; } if (!isValidSecureUrl(url, true)) { alert("Link manual harus HTTPS dan berasal dari domain ujian yang diizinkan."); return; }
     activePin = specialSettings.pin || "1234"; const duration = specialSettings.duration || 60;
     startExamEngine(url, "Manual Access", duration, true); document.getElementById('manual-url').value = "";
 }
 
-async function startExam(id, correctToken) {
-    const tokenInput = document.getElementById(`tk-${id}`).value.toUpperCase(); if (tokenInput !== correctToken) { showNotify("Token salah! Silahkan hubungi pengawas.", "error"); return; }
-    const doc = await publicData.collection('exams').doc(id).get(); if (doc.exists) { const x = doc.data(); activePin = x.pin || specialSettings.pin; startExamEngine(x.link, x.mapel, x.duration, x.camera, id); }
+async function startExam(id) {
+    if (!user || currentRole !== 'student') {
+        showNotify("Sesi siswa tidak valid. Silakan login kembali.", "error");
+        return;
+    }
+
+    const tokenInput = (document.getElementById(`tk-${id}`)?.value || '').trim().toUpperCase();
+    if (!tokenInput) {
+        showNotify("Token ujian wajib diisi.", "error");
+        return;
+    }
+
+    try {
+        const doc = await publicData.collection('exams').doc(id).get();
+        if (!doc.exists) {
+            showNotify("Paket ujian tidak ditemukan.", "error");
+            return;
+        }
+
+        const x = doc.data();
+        const allowedClasses = String(x.kelas || '').split(',').map(v => v.trim()).filter(Boolean);
+        if (x.active === false || !allowedClasses.includes(String(user.kelas || '').trim())) {
+            showNotify("Anda tidak memiliki akses ke ujian ini.", "error");
+            return;
+        }
+
+        if (String(tokenInput) !== String(x.token || '').trim().toUpperCase()) {
+            reportViolation("Token Ujian Salah");
+            showNotify("Token ujian salah. Silakan hubungi pengawas.", "error");
+            return;
+        }
+
+        const duration = Math.max(1, Math.min(
+            SECURITY_CONFIG.maxExamDurationMin,
+            Number(x.duration) || 60
+        ));
+        const url = String(x.link || '').trim();
+
+        if (!isValidSecureUrl(url, false)) {
+            showNotify("Link ujian tidak aman/valid. Hubungi admin.", "error");
+            return;
+        }
+
+        activePin = x.pin || specialSettings.pin;
+        createResumeNonce();
+        await startExamEngine(url, x.mapel, duration, x.camera !== false, id);
+    } catch (e) {
+        console.error(e);
+        showNotify("Gagal memverifikasi paket ujian.", "error");
+    }
 }
 
 async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
@@ -1347,13 +1641,15 @@ async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
     }
 
     enableHardLockdown();
+    await requestWakeLock();
 
     // 2. LOGIKA WAKTU (Mendukung Refresh Halaman/Resume)
     let now = Date.now();
     let endTime;
     if (isResuming) {const savedState = JSON.parse(localStorage.getItem('active_exam_state')); endTime = savedState.endTime;
-    } else {endTime = now + (dur * 60 * 1000); localStorage.setItem('active_exam_state', JSON.stringify({
-            url, mapel, endTime, isCamera: isCameraRequired, pin: activePin, examId: examId, originalDur: dur })); }
+    } else {endTime = now + (dur * 60 * 1000); localStorage.setItem('active_exam_state', JSON.stringify(secureExamState({
+            url, mapel, endTime, isCamera: isCameraRequired, examId: examId, originalDur: dur
+        }))); }
 
     // Hitung waktu mulai asli (untuk mengecek batas 30 menit)
     let startTime;
@@ -1361,7 +1657,7 @@ async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
     startTime = savedState.endTime - (savedState.originalDur * 60 * 1000); } else {startTime = now; }
 
     document.getElementById('view-mapel').textContent = mapel;
-    document.getElementById('exam-frame-container').innerHTML = `<iframe src="${url}" allow="camera; microphone; display-capture" sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-modals allow-top-navigation" class="w-full h-full border-none"></iframe>`;
+    document.getElementById('exam-frame-container').innerHTML = `<iframe src="${url}" allow="camera; microphone; display-capture" sandbox="allow-forms allow-scripts allow-same-origin allow-modals" class="w-full h-full border-none"></iframe>`;
     document.getElementById('exam-viewer').classList.remove('hidden-element');
 
     // 3. TIMER INTERVAL
@@ -1409,6 +1705,7 @@ async function finishExam() {
             monitorChannel.send({ type: 'broadcast', event: 'remove-card', payload: { userId: user.id.replace(/[^a-zA-Z0-9]/g, '') } });
         } catch (e) { console.warn("Cleanup DB failed"); }
     }
+    await releaseWakeLock();
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     alert("Ujian selesai! Pastikan jawaban anda sudah terkirim."); location.reload();
 }
@@ -1433,33 +1730,91 @@ async function clearClipboard() {
 let isSecuritySetup = false, blurTimer = null; 
 function enableHardLockdown() {
     if (isSecuritySetup) return;
-    for(let i=0; i<20; i++) {history.pushState({ exam: true }, null, location.href); }
-    window.onpopstate = () => history.pushState(null, null, location.href);
-    document.oncontextmenu = (e) => { e.preventDefault(); return false; }; document.body.style.webkitUserSelect = "none";
+
+    for (let i = 0; i < 20; i++) {
+        history.pushState({ exam: true }, null, location.href);
+    }
+    window.onpopstate = () => history.pushState({ exam: true }, null, location.href);
+
+    document.oncontextmenu = e => { e.preventDefault(); return false; };
+    document.body.style.webkitUserSelect = "none";
+    document.body.style.webkitTouchCallout = "none";
+
+    const blockedKeys = new Set([
+        'F12', 'F11', 'PrintScreen', 'ContextMenu'
+    ]);
+
     window.onkeydown = (e) => {
         if (!isExamActive) return;
-        if ([122, 123, 91, 92].includes(e.keyCode) || (e.ctrlKey && ['u','s','p','c','v'].includes(e.key.toLowerCase()))) { e.preventDefault(); reportViolation("Shortcut Terlarang"); return false; }
+
+        const k = String(e.key || '');
+        const lower = k.toLowerCase();
+        const ctrlOrMeta = e.ctrlKey || e.metaKey;
+
+        if (
+            blockedKeys.has(k) ||
+            (ctrlOrMeta && ['u','s','p','c','v','x','a'].includes(lower)) ||
+            (e.ctrlKey && e.shiftKey && ['i','j','c'].includes(lower)) ||
+            (e.altKey && ['tab','arrowleft','arrowright'].includes(lower))
+        ) {
+            e.preventDefault();
+            e.stopPropagation();
+            reportViolation("Shortcut/Perintah Sistem Terlarang");
+            return false;
+        }
     };
-    window.onblur = () => { 
-        if (!isExamActive) return; 
-        setTimeout(() => {
-            if (document.activeElement && ['IFRAME', 'INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) { if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; } return; }
-            blurTimer = setTimeout(() => { reportViolation("Kehilangan Fokus Layar"); }, 3000); 
-        }, 500);
+
+    ['copy','cut','paste','dragstart','drop'].forEach(evt => {
+        window.addEventListener(evt, e => {
+            if (isExamActive) {
+                e.preventDefault();
+                reportViolation("Aksi Clipboard/Drag Terlarang");
+            }
+        }, true);
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (isExamActive && document.visibilityState === 'hidden') {
+            reportViolation("Halaman Tidak Terlihat");
+        }
+    });
+
+    window.onblur = () => {
+        if (!isExamActive) return;
+        blurTimer = setTimeout(() => {
+            if (document.visibilityState === 'visible') {
+                reportViolation("Kehilangan Fokus Layar");
+            }
+        }, 1200);
     };
-    // 2. DETEKSI SPLIT SCREEN (Sering digunakan di Android)
+
+    window.onfocus = () => {
+        if (blurTimer) {
+            clearTimeout(blurTimer);
+            blurTimer = null;
+        }
+    };
+
     window.addEventListener('resize', () => {
         if (!isExamActive) return;
+
         const widthDiff = Math.abs(window.innerWidth - initialWidth);
         const isTooSmall = window.innerHeight < (initialHeight * 0.65);
-        const isInputActive = ['input', 'textarea'].includes(document.activeElement.tagName.toLowerCase());
-        // 1. Deteksi Perubahan Lebar (Split Screen Samping)
-        if (widthDiff > 100) {reportViolation("Layar Terbagi / Split Screen (Lebar)"); initialWidth = window.innerWidth; }
-        // Kita abaikan jika siswa sedang mengetik (keyboard muncul)
-        if (isTooSmall && !isInputActive) { reportViolation("Deteksi Layar Kecil / Split Screen (Tinggi)"); }
+        const active = document.activeElement;
+        const isInputActive = active && ['INPUT', 'TEXTAREA'].includes(active.tagName);
+
+        if (widthDiff > 100) {
+            reportViolation("Layar Terbagi / Perubahan Ukuran Layar");
+            initialWidth = window.innerWidth;
+        }
+        if (isTooSmall && !isInputActive) {
+            reportViolation("Deteksi Layar Kecil / Split Screen");
+        }
     });
-    window.onfocus = () => { if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; } }; isSecuritySetup = true;
+
+    isSecuritySetup = true;
 }
+
 
 function initPeerConnection() {
     // Pastikan ID disanitasi sama persis dengan yang dicari Admin
@@ -1990,6 +2345,10 @@ async function generateAISoal() {
     const loader = document.getElementById('ai-loading');
 
     if (!topic) return alert("Isi topik!");
+    if (!apiKey) {
+        showNotify("Fitur AI dinonaktifkan pada versi aman. Hubungkan ke Supabase Edge Function/server-side AI agar API key tidak bocor.", "error");
+        return;
+    }
     
     btn.classList.add('hidden-element');
     loader.classList.remove('hidden-element');
@@ -2036,6 +2395,11 @@ async function generateAISoal() {
 
 // --- J. PENGATURAN AKHIR ---
 window.onbeforeunload = function() { if (isExamActive) return "Sedang Ujian!"; };
+window.addEventListener('pagehide', () => {
+    if (isExamActive) {
+        try { reportViolation("Halaman ditinggalkan"); } catch (_) {}
+    }
+});
 
 document.addEventListener('fullscreenchange', () => {
     if (isExamActive && !document.fullscreenElement) { 
