@@ -345,7 +345,7 @@
                                     <p class="text-[9px] font-semibold text-slate-400 ml-1">0 = langsung muncul setelah ujian dimulai</p>
                                 </div>
                                 <div class="flex items-end">
-                                    <button onclick="saveSpecialSettings()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all uppercase tracking-widest">Update Akses</button>
+                                    <button type="button" onclick="saveSpecialSettings()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all uppercase tracking-widest">Update Akses</button>
                                 </div>
                             </div>
                         </div>
@@ -1250,43 +1250,103 @@ async function syncSpecialSettings() {
 }
 
 async function saveSpecialSettings() {
-    const pin = document.getElementById('special-pin').value.trim();
-    const duration = parseInt(document.getElementById('special-duration').value, 10);
-    const finishDelay = parseInt(document.getElementById('special-finish-delay').value, 10);
+    const pinEl = document.getElementById('special-pin');
+    const durationEl = document.getElementById('special-duration');
+    const finishDelayEl = document.getElementById('special-finish-delay');
 
-    if (!pin) {
-        alert("PIN Pengawas Global wajib diisi.");
-        return;
-    }
+    const pin = pinEl ? pinEl.value.trim() : "";
+    const duration = parseInt(durationEl?.value, 10);
+    const finishDelay = parseInt(finishDelayEl?.value, 10);
 
-    if (!Number.isFinite(duration) || duration < 1) {
-        alert("Durasi Default harus minimal 1 menit.");
-        return;
-    }
+    // ==============================
+    // VALIDASI
+    // ==============================
 
+    if (!pin) {showNotify("PIN Pengawas Global wajib diisi.", "error");
+        pinEl?.focus(); return; }
+    if (!Number.isFinite(duration) || duration < 1) {showNotify("Durasi Default harus minimal 1 menit.", "error");
+        durationEl?.focus(); return; }
     if (!Number.isFinite(finishDelay) || finishDelay < 0) {
-        alert("Waktu muncul tombol Selesai harus 0 atau lebih.");
-        return;
+        showNotify(
+            "Waktu muncul tombol Selesai harus 0 menit atau lebih.",
+            "error"
+        );
+        finishDelayEl?.focus(); return;
     }
 
-    await upsertSettingsItem('special_methods', {
-        pin,
-        duration,
-        finishButtonMinutes: finishDelay,
-        updatedAt: Date.now()
-    });
-
-    specialSettings = {
-        pin,
-        duration,
-        finishButtonMinutes: finishDelay
-    };
-
-    alert(
-        `Konfigurasi berhasil diperbarui.\n\n` +
-        `Durasi default: ${duration} menit\n` +
-        `Tombol Selesai muncul setelah: ${finishDelay} menit`
+    // ==============================
+    // TOMBOL UPDATE
+    // ==============================
+    const btn = document.querySelector(
+        'button[onclick="saveSpecialSettings()"]'
     );
+
+    const originalText = btn ? btn.innerHTML : "";
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `
+                <i class="fa-solid fa-spinner fa-spin mr-2"></i>
+                MENYIMPAN...
+            `;
+
+            btn.classList.add('opacity-70', 'cursor-not-allowed'); }
+
+        // ==============================
+        // SIMPAN KE DATABASE
+        // ==============================
+        const result = await upsertSettingsItem(
+            'special_methods',
+            {
+                pin: pin,
+                duration: duration,
+                finishButtonMinutes: finishDelay,
+                updatedAt: Date.now()
+            }
+        );
+
+        // Jika database mengembalikan error
+        if (result && result.error) {throw result.error; }
+
+        // ==============================
+        // UPDATE DATA LOKAL
+        // ==============================
+        specialSettings = {
+            pin: pin,
+            duration: duration,
+            finishButtonMinutes: finishDelay
+        };
+
+        // ==============================
+        // NOTIFIKASI BERHASIL
+        // ==============================
+        showNotify(
+            `Konfigurasi Akses berhasil disimpan. Tombol Selesai akan muncul setelah ${finishDelay} menit.`,
+            "success"
+        );
+
+    } catch (error) { console.error("Gagal menyimpan Konfigurasi Akses:", error );
+        const message =
+            error?.message ||
+            error?.details ||
+            error?.hint ||
+            "Terjadi kesalahan saat menyimpan Konfigurasi Akses.";
+        showNotify(
+            "GAGAL MENYIMPAN: " + message, "error");
+
+    } finally {
+        // ==============================
+        // KEMBALIKAN TOMBOL
+        // ==============================
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            btn.classList.remove(
+                'opacity-70',
+                'cursor-not-allowed'
+            );
+        }
+    }
 }
 
 // --- E. STUDENT SERVICE (EXAM ACCESS) ---
