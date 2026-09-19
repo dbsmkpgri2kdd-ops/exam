@@ -954,39 +954,9 @@ window.onload = async () => {
         }
         // 2. LOGIKA AUTO-RESUME UJIAN
         const activeExam = localStorage.getItem('active_exam_state');
-        if (activeExam) {
-            const examData = JSON.parse(activeExam); const now = Date.now();
-            if (now < examData.endTime) {
-                // Sembunyikan halaman menu siswa agar tidak terlihat
-                document.getElementById('student-page').classList.add('hidden-element');
-                
-                // Buat layar perantara agar browser mengizinkan akses kamera (Butuh klik fisik)
-                const resumeDiv = document.createElement('div');
-                resumeDiv.id = 'resume-screen';
-                resumeDiv.className = 'fixed inset-0 bg-slate-900 z-[99999] flex flex-col items-center justify-center p-6 text-center';
-                resumeDiv.innerHTML = `
-                    <div class="w-24 h-24 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mb-6">
-                        <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                    </div>
-                    <h2 class="text-3xl font-black text-white mb-2 uppercase tracking-wide">Memuat Ulang...</h2>
-                    <p class="text-slate-400 font-medium mb-10 text-sm">Halaman direfresh. Sesi ujian dan waktu Anda masih berjalan.</p>
-                    <button id="btn-lanjut-ujian" class="w-full max-w-sm bg-indigo-600 text-white py-5 rounded-2xl font-black text-sm hover:bg-indigo-700 shadow-[0_0_20px_rgba(79,70,229,0.4)] transition-all uppercase tracking-widest active:scale-95">
-                        LANJUTKAN UJIAN
-                    </button>
-                `;
-                document.body.appendChild(resumeDiv);
-
-                // Tombol diklik = Kamera diizinkan = Ujian kembali terbuka
-                document.getElementById('btn-lanjut-ujian').onclick = () => {
-                    resumeDiv.remove();
-                    isResuming = true; 
-                    activePin = examData.pin; 
-                    const remainingMinutes = Math.round((examData.endTime - Date.now()) / 60000); 
-                    startExamEngine(examData.url, examData.mapel, examData.originalDur || remainingMinutes, examData.isCamera, examData.examId);
-                };
-            } else {
-                localStorage.removeItem('active_exam_state');
-            }
+        if (activeExam) {const examData = JSON.parse(activeExam); const now = Date.now();
+            if (now < examData.endTime) {isResuming = true; activePin = examData.pin; const remainingMinutes = Math.round((examData.endTime - now) / 60000); startExamEngine(examData.url, examData.mapel, examData.originalDur || remainingMinutes, examData.isCamera);
+            } else {localStorage.removeItem('active_exam_state');}
         }
         // 3. JALANKAN SERVICE DASAR
         if (!sessionData || sessionData.role !== 'admin') { setRole('student'); }
@@ -1865,11 +1835,7 @@ function enableHardLockdown() {
         history.pushState({ exam: true }, null, location.href);
 	history.pushState({ exam: true }, null, location.href);
 	history.pushState({ exam: true }, null, location.href);
-        reportSecurityViolationOnce(
-            "back",
-            "Mencoba Kembali / Keluar dari Ujian",
-            4000
-        );
+	window.history.forward();
     };
 
     // Keyboard fisik / Chromebook / desktop fallback.
@@ -2302,7 +2268,7 @@ async function startStudentBroadcast() {
 function captureSnapshot() {
     const video = document.getElementById('self-video'); if (!video || video.readyState < 2) return null;
     try { sharedCanvas.width = 160; sharedCanvas.height = 120; sharedCtx.drawImage(video, 0, 0, sharedCanvas.width, sharedCanvas.height); // Tetap di resolusi rendah untuk efisiensi bandwidth
-        return sharedCanvas.toDataURL('image/jpeg', 0.2); // Kualitas 0.2 sangat kecil ukurannya (sekitar 3-5 KB per gambar)
+        return sharedCanvas.toDataURL('image/jpeg', 0.5); // Kualitas 0.5 sangat kecil ukurannya (sekitar 3-5 KB per gambar)
     } catch (e) { return null; }
 }
 
