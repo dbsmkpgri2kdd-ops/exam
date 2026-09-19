@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Exambro Pro 2026 - AI Super Edition</title>
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="PRIDA EXAMBRO">
+    <link rel="manifest" href="manifest.json">
     
     <!-- Scripts & Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -326,17 +330,22 @@
                                 </div>
                                 <h3 class="font-extrabold text-slate-800 text-lg tracking-tight">Konfigurasi Akses Master</h3>
                             </div>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                                 <div class="space-y-2">
                                     <label class="text-[10px] font-black text-indigo-600 uppercase ml-1 tracking-widest">PIN Pengawas Global</label>
                                     <input type="text" id="special-pin" class="w-full bg-white p-4 rounded-2xl border border-slate-200 font-black text-slate-700 outline-none focus:ring-2 ring-indigo-400 transition-all text-sm" value="1234">
                                 </div>
                                 <div class="space-y-2">
                                     <label class="text-[10px] font-black text-indigo-600 uppercase ml-1 tracking-widest">Durasi Default (Min)</label>
-                                    <input type="number" id="special-duration" class="w-full bg-white p-4 rounded-2xl border border-slate-200 font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-400 transition-all text-sm" value="60">
+                                    <input type="number" id="special-duration" min="1" step="1" class="w-full bg-white p-4 rounded-2xl border border-slate-200 font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-400 transition-all text-sm" value="60">
+                                </div>
+                                <div class="space-y-2">
+                                    <label class="text-[10px] font-black text-indigo-600 uppercase ml-1 tracking-widest">Tombol Selesai Muncul (Min)</label>
+                                    <input type="number" id="special-finish-delay" min="0" step="1" class="w-full bg-white p-4 rounded-2xl border border-slate-200 font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-400 transition-all text-sm" value="30">
+                                    <p class="text-[9px] font-semibold text-slate-400 ml-1">0 = langsung muncul setelah ujian dimulai</p>
                                 </div>
                                 <div class="flex items-end">
-                                    <button onclick="saveSpecialSettings()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all uppercase tracking-widest">Update Akses</button>
+                                    <button type="button" onclick="saveSpecialSettings()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all uppercase tracking-widest">Update Akses</button>
                                 </div>
                             </div>
                         </div>
@@ -497,7 +506,7 @@
         </div>
     </div>
 
-    <!-- Panel Sinkronisasi -->
+<!-- Panel Sinkronisasi -->
     <div class="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border mb-8 shadow-sm">
         <div class="flex flex-col md:flex-row items-stretch md:items-end space-y-4 md:space-y-0 md:space-x-4">
             <div class="flex-grow">
@@ -508,15 +517,28 @@
                         placeholder="https://docs.google.com/spreadsheets/d/...">
                     <div class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 005.656-5.656l-1.1 1.1" />
                         </svg>
                     </div>
                 </div>
             </div>
-            <button id="btn-sync-sheet" onclick="saveAndSyncSheet()" 
-                class="bg-emerald-600 text-white px-8 py-4 rounded-2xl font-black text-xs shadow-xl shadow-emerald-100 flex items-center hover:bg-emerald-700 active:scale-95 transition-all justify-center">
-                <span id="sync-text">SIMPAN & SINKRON</span>
-            </button>
+
+            <!-- KELOMPOK TOMBOL (SIMPAN & SINKRON DAN HAPUS DATA) -->
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button id="btn-sync-sheet" onclick="saveAndSyncSheet()" 
+                    class="bg-emerald-600 text-white px-8 py-4 rounded-2xl font-black text-xs shadow-xl shadow-emerald-100 flex items-center hover:bg-emerald-700 active:scale-95 transition-all justify-center whitespace-nowrap">
+                    <span id="sync-text">SIMPAN & SINKRON</span>
+                </button>
+
+                <!-- TOMBOL HAPUS DATA SISWA SEMENTARA/PERMANEN -->
+                <button id="btn-clear-students" onclick="clearStudentDatabase()" 
+                    class="bg-rose-600 text-white px-6 py-4 rounded-2xl font-black text-xs shadow-xl shadow-rose-100 flex items-center hover:bg-rose-700 active:scale-95 transition-all justify-center whitespace-nowrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    <span>HAPUS DATA SISWA</span>
+                </button>
+            </div>
         </div>
     </div>
 
@@ -775,9 +797,42 @@ async function checkSupabaseConnection() {
 }
 
 async function upsertSettingsItem(settingId, data) {
-    let payload = { id: settingId, ...data }, res = await db.from('settings').upsert(payload, { onConflict: 'id' });
-    if (res.error && res.error.code === '42703') { payload = { key: settingId, ...data }; res = await db.from('settings').upsert(payload, { onConflict: 'key' }); }
-    if (res.error) throw res.error; return res;
+    // Jangan menggunakan upsert(onConflict) karena PostgREST akan mengembalikan
+    // HTTP 400 jika kolom konflik tidak memiliki UNIQUE/PK yang sesuai.
+    // Pola ini lebih kompatibel dengan tabel settings yang memakai id maupun key.
+    const findExisting = async (column) => {
+        return await db.from('settings').select('*').eq(column, settingId).maybeSingle();
+    };
+
+    let existing = await findExisting('id');
+    let identityColumn = 'id';
+
+    if (existing.error && ['42703', 'PGRST204'].includes(existing.error.code)) {
+        existing = await findExisting('key');
+        identityColumn = 'key';
+    }
+
+    if (existing.error) throw existing.error;
+
+    if (existing.data) {
+        const updatePayload = { ...data };
+        const result = await db.from('settings').update(updatePayload).eq(identityColumn, settingId).select().maybeSingle();
+        if (result.error) throw result.error;
+        return result;
+    }
+
+    // Jika baris belum ada, coba insert dengan kolom identitas yang ditemukan.
+    const insertPayload = { [identityColumn]: settingId, ...data };
+    let result = await db.from('settings').insert(insertPayload).select().maybeSingle();
+
+    // Jika skema ternyata memakai kolom identitas yang lain, coba sekali lagi.
+    if (result.error && identityColumn === 'id' && ['42703', 'PGRST204'].includes(result.error.code)) {
+        const fallbackPayload = { key: settingId, ...data };
+        result = await db.from('settings').insert(fallbackPayload).select().maybeSingle();
+    }
+
+    if (result.error) throw result.error;
+    return result;
 }
 
 async function cleanupLiveRows(createdBefore) {
@@ -825,7 +880,21 @@ function createCollectionWrapper(db) {
                     const getRow = async () => { let result = await queryKey('id'); if (result.error && result.error.code === '42703') result = await queryKey('key'); return result; };
                     const updateRow = async (data) => { let result = await db.from(name).update(data).eq('id', id); if (result.error && result.error.code === '42703') result = await db.from(name).update(data).eq('key', id); return result; };
                     const deleteRow = async () => { let result = await db.from(name).delete().eq('id', id); if (result.error && result.error.code === '42703') result = await db.from(name).delete().eq('key', id); return result; };
-                    const upsertRow = async (data) => { let payload = { ...data, id }; let result = await db.from(name).upsert(payload, { onConflict: 'id' }); if (result.error && result.error.code === '42703') { payload = { ...data, key: id }; result = await db.from(name).upsert(payload, { onConflict: 'key' }); } return result; };
+                    const upsertRow = async (data) => {
+                        let found = await db.from(name).select('*').eq('id', id).maybeSingle();
+                        let identity = 'id';
+                        if (found.error && ['42703', 'PGRST204'].includes(found.error.code)) {
+                            found = await db.from(name).select('*').eq('key', id).maybeSingle();
+                            identity = 'key';
+                        }
+                        if (found.error) return found;
+                        if (found.data) return await db.from(name).update(data).eq(identity, id).select().maybeSingle();
+                        let result = await db.from(name).insert({ ...data, [identity]: id }).select().maybeSingle();
+                        if (result.error && identity === 'id' && ['42703', 'PGRST204'].includes(result.error.code)) {
+                            result = await db.from(name).insert({ ...data, key: id }).select().maybeSingle();
+                        }
+                        return result;
+                    };
                     
                     return {
                         async get() { const { data, error } = await getRow(); if (error && error.code !== 'PGRST116') throw error; return { exists: !!data, data: () => { const { id: _id, ...rest } = data || {}; return rest; }, id }; },
@@ -866,7 +935,7 @@ let initialWidth = 0;
 let initialHeight = 0;
 let monitorInterval = null;
 let currentRole = 'student';
-let specialSettings = { pin: "1234", duration: 60 };
+let specialSettings = { pin: "1234", duration: 60, finishButtonMinutes: 30 };
 let studentSnapshotInterval = null;
 let myPeer = null;
 let currentClassChannel = null;
@@ -876,7 +945,6 @@ const sharedCtx = sharedCanvas.getContext('2d');
 
 // --- 3. INITIALIZATION ---
 window.onload = async () => {
-    if ('serviceWorker' in navigator) {navigator.serviceWorker.getRegistrations().then(function(registrations) { for(let registration of registrations) {registration.unregister(); }}); }
     try { if (!await checkSupabaseConnection()) return; document.getElementById('loading-overlay').classList.add('hidden-element');
     // 1. CEK SESSION LOGIN
     let sessionData = null; const savedSession = localStorage.getItem('exambro_session');
@@ -1050,6 +1118,47 @@ async function saveAndSyncSheet() {
     } catch (e) { console.error(e); showNotify("Gagal Sinkron: " + e.message, "error"); } finally { btn.disabled = false; btnText.textContent = "SIMPAN & SINKRON"; }
 }
 
+async function clearStudentDatabase() {
+    // 1. Konfirmasi Keamanan Pertama
+    const confirmFirst = confirm("Apakah Anda yakin ingin MENGHAPUS SELURUH data siswa di database?");
+    if (!confirmFirst) return;
+
+    // 2. Konfirmasi Keamanan Kedua
+    const confirmSecond = confirm("Tindakan ini tidak bisa dibatalkan! Semua akun siswa akan terhapus. Lanjutkan?");
+    if (!confirmSecond) return;
+
+    const btn = document.getElementById('btn-clear-students');
+    btn.disabled = true;
+    btn.innerHTML = "MENGHAPUS...";
+
+    try {
+        // 3. Eksekusi Hapus Semua Baris dari Tabel 'users' Supabase
+        const { error } = await db.from('users').delete().neq('nis', '000000'); // Menghapus semua data yang memilik NIS
+
+        if (error) throw error;
+
+        // 4. Reset Cache & Refresh UI
+        localStorage.removeItem('admin_student_count');
+        showNotify("Seluruh data siswa berhasil dihapus dari database!", "success");
+
+        await syncAdminStudentData();
+        if (typeof loadKelas === "function") loadKelas();
+
+    } catch (e) {
+        console.error(e);
+        showNotify("Gagal menghapus data siswa: " + e.message, "error");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span>HAPUS DATA SISWA</span>`;
+    }
+}
+
+
+
 async function saveExam() {
     const id = document.getElementById('edit-exam-id').value, nodes = document.querySelectorAll('input[name="target-kelas"]:checked'), selectedClasses = Array.from(nodes).map(node => node.value).join(', ');
     if (!selectedClasses) { showNotify("Pilih kelas!", "error"); return; }
@@ -1164,8 +1273,128 @@ async function syncAdminStudentData() {
     }
 }
 
-async function syncSpecialSettings() { const d = await publicData.collection('settings').doc('special_methods').get(); if(d.exists) specialSettings = d.data(); }
-async function saveSpecialSettings() { await upsertSettingsItem('special_methods', { pin: document.getElementById('special-pin').value, duration: parseInt(document.getElementById('special-duration').value), updatedAt: Date.now() }); alert("Konfigurasi Akses Cepat Diperbarui!"); }
+async function syncSpecialSettings() {
+    const d = await publicData.collection('settings').doc('special_methods').get();
+
+    if (d.exists) {
+        const saved = d.data() || {};
+        specialSettings = {
+            pin: saved.pin || "1234",
+            duration: Number(saved.duration) > 0 ? Number(saved.duration) : 60,
+            finishButtonMinutes: Number.isFinite(Number(saved.finishButtonMinutes))
+                ? Math.max(0, Number(saved.finishButtonMinutes))
+                : 30
+        };
+    }
+
+    const pinEl = document.getElementById('special-pin');
+    const durationEl = document.getElementById('special-duration');
+    const finishDelayEl = document.getElementById('special-finish-delay');
+
+    if (pinEl) pinEl.value = specialSettings.pin;
+    if (durationEl) durationEl.value = specialSettings.duration;
+    if (finishDelayEl) finishDelayEl.value = specialSettings.finishButtonMinutes;
+}
+
+async function saveSpecialSettings() {
+    const pinEl = document.getElementById('special-pin');
+    const durationEl = document.getElementById('special-duration');
+    const finishDelayEl = document.getElementById('special-finish-delay');
+
+    const pin = pinEl ? pinEl.value.trim() : "";
+    const duration = parseInt(durationEl?.value, 10);
+    const finishDelay = parseInt(finishDelayEl?.value, 10);
+
+    // ==============================
+    // VALIDASI
+    // ==============================
+
+    if (!pin) {showNotify("PIN Pengawas Global wajib diisi.", "error");
+        pinEl?.focus(); return; }
+    if (!Number.isFinite(duration) || duration < 1) {showNotify("Durasi Default harus minimal 1 menit.", "error");
+        durationEl?.focus(); return; }
+    if (!Number.isFinite(finishDelay) || finishDelay < 0) {
+        showNotify(
+            "Waktu muncul tombol Selesai harus 0 menit atau lebih.",
+            "error"
+        );
+        finishDelayEl?.focus(); return;
+    }
+
+    // ==============================
+    // TOMBOL UPDATE
+    // ==============================
+    const btn = document.querySelector(
+        'button[onclick="saveSpecialSettings()"]'
+    );
+
+    const originalText = btn ? btn.innerHTML : "";
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `
+                <i class="fa-solid fa-spinner fa-spin mr-2"></i>
+                MENYIMPAN...
+            `;
+
+            btn.classList.add('opacity-70', 'cursor-not-allowed'); }
+
+        // ==============================
+        // SIMPAN KE DATABASE
+        // ==============================
+        const result = await upsertSettingsItem(
+            'special_methods',
+            {
+                pin: pin,
+                duration: duration,
+                finishButtonMinutes: finishDelay,
+                updatedAt: Date.now()
+            }
+        );
+
+        // Jika database mengembalikan error
+        if (result && result.error) {throw result.error; }
+
+        // ==============================
+        // UPDATE DATA LOKAL
+        // ==============================
+        specialSettings = {
+            pin: pin,
+            duration: duration,
+            finishButtonMinutes: finishDelay
+        };
+
+        // ==============================
+        // NOTIFIKASI BERHASIL
+        // ==============================
+        showNotify(
+            `Konfigurasi Akses berhasil disimpan. Tombol Selesai akan muncul setelah ${finishDelay} menit.`,
+            "success"
+        );
+
+    } catch (error) { console.error("Gagal menyimpan Konfigurasi Akses:", error );
+        const message =
+            error?.message ||
+            error?.details ||
+            error?.hint ||
+            "Terjadi kesalahan saat menyimpan Konfigurasi Akses.";
+        showNotify(
+            "GAGAL MENYIMPAN: " + message, "error");
+
+    } finally {
+        // ==============================
+        // KEMBALIKAN TOMBOL
+        // ==============================
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            btn.classList.remove(
+                'opacity-70',
+                'cursor-not-allowed'
+            );
+        }
+    }
+}
 
 // --- E. STUDENT SERVICE (EXAM ACCESS) ---
 async function syncStudentData() {
@@ -1271,101 +1500,219 @@ async function startExam(id, correctToken) {
 }
 
 async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
-    await clearClipboard(); 
-    isExamActive = true; 
-    for(let i=0; i<20; i++) {history.pushState(null, null, location.href); }
-    violationCount = 0; 
-    initialWidth = window.innerWidth; 
+    // Simpan referensi awal layar sebelum ujian dimulai.
+    securityBaseline.width = window.innerWidth;
+    securityBaseline.height = window.innerHeight;
+    securityBaseline.orientation = screen.orientation ? screen.orientation.type : null;
+
+    // Coba masuk fullscreen sedini mungkin. Pada Android/PWA keberhasilan
+    // tetap bergantung pada browser dan gesture pengguna.
+    enterExamFullscreen();
+
+    await clearClipboard();
+    isExamActive = true;
+    violationCount = 0;
+    initialWidth = window.innerWidth;
     initialHeight = window.innerHeight;
 
-    const selfVideo = document.getElementById('self-video');
-    const finishBtn = document.getElementById('btn-finish-exam'); // Referensi tombol selesai
+    // History trap dibuat saat ujian dimulai agar tombol Back Android
+    // tidak langsung meninggalkan halaman ujian.
+    for (let i = 0; i < 20; i++) {
+        history.pushState({ exam: true }, null, location.href);
+    }
 
-    // 1. Sembunyikan tombol selesai saat mulai
+    const selfVideo = document.getElementById('self-video');
+    const finishBtn = document.getElementById('btn-finish-exam');
+
     if (finishBtn) finishBtn.classList.add('hidden-element');
 
     // LOGIKA KAMERA
     if (isCameraRequired === false) {
-        if (window.localStream) { window.localStream.getTracks().forEach(t => t.stop()); window.localStream = null; }
-        selfVideo.srcObject = null; selfVideo.parentElement.classList.add('hidden-element');
-    } else { try {const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 120 }, height: { ideal: 90 }, frameRate: { max: 10 } } });
-            window.localStream = stream; selfVideo.srcObject = stream; selfVideo.parentElement.classList.remove('hidden-element'); startStudentBroadcast(); } catch (e) { alert("⚠️ Ujian ini wajib kamera!"); return; }
+        if (window.localStream) {
+            window.localStream.getTracks().forEach(t => t.stop());
+            window.localStream = null;
+        }
+        selfVideo.srcObject = null;
+        selfVideo.parentElement.classList.add('hidden-element');
+    } else {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 120 },
+                    height: { ideal: 90 },
+                    frameRate: { max: 10 }
+                }
+            });
+            window.localStream = stream;
+            selfVideo.srcObject = stream;
+            selfVideo.parentElement.classList.remove('hidden-element');
+            startStudentBroadcast();
+        } catch (e) {
+            isExamActive = false;
+            stopExamSecurity();
+            alert("⚠️ Ujian ini wajib kamera! Kamera tidak dapat digunakan.");
+            return;
+        }
     }
 
     enableHardLockdown();
+    requestExamWakeLock();
+    enterExamFullscreen();
 
-    // 2. LOGIKA WAKTU (Mendukung Refresh Halaman/Resume)
+    // LOGIKA WAKTU (Mendukung Refresh Halaman/Resume)
     let now = Date.now();
     let endTime;
-    if (isResuming) {const savedState = JSON.parse(localStorage.getItem('active_exam_state')); endTime = savedState.endTime;
-    } else {endTime = now + (dur * 60 * 1000); localStorage.setItem('active_exam_state', JSON.stringify({
-            url, mapel, endTime, isCamera: isCameraRequired, pin: activePin, examId: examId, originalDur: dur })); }
-
-    // Hitung waktu mulai asli (untuk mengecek batas 30 menit)
     let startTime;
-    if (isResuming) {const savedState = JSON.parse(localStorage.getItem('active_exam_state'));
-    startTime = savedState.endTime - (savedState.originalDur * 60 * 1000); } else {startTime = now; }
+    let finishButtonMinutes;
+
+    if (isResuming) {
+        const savedState = JSON.parse(localStorage.getItem('active_exam_state'));
+
+        endTime = savedState.endTime;
+        startTime = savedState.startTime ||
+            (savedState.endTime - (savedState.originalDur * 60 * 1000));
+
+        finishButtonMinutes = Number.isFinite(Number(savedState.finishButtonMinutes))
+            ? Math.max(0, Number(savedState.finishButtonMinutes))
+            : 30;
+    } else {
+        endTime = now + (dur * 60 * 1000);
+        startTime = now;
+
+        finishButtonMinutes = Number.isFinite(Number(specialSettings.finishButtonMinutes))
+            ? Math.max(0, Number(specialSettings.finishButtonMinutes))
+            : 30;
+
+        localStorage.setItem('active_exam_state', JSON.stringify({
+            url,
+            mapel,
+            startTime,
+            endTime,
+            isCamera: isCameraRequired,
+            pin: activePin,
+            examId: examId,
+            originalDur: dur,
+            finishButtonMinutes
+        }));
+    }
 
     document.getElementById('view-mapel').textContent = mapel;
-    document.getElementById('exam-frame-container').innerHTML = `<iframe src="${url}" allow="camera; microphone; display-capture" sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-modals allow-top-navigation" class="w-full h-full border-none"></iframe>`;
+
+    // Iframe tetap mengizinkan fungsi yang umum dibutuhkan Google Forms/ujian,
+    // tetapi tidak memberi izin navigasi/top-level popup.
+    const frame = document.createElement('iframe');
+    frame.src = url;
+    frame.allow = "camera; microphone";
+    frame.setAttribute(
+        "sandbox",
+        "allow-forms allow-scripts allow-same-origin allow-modals"
+    );
+    frame.className = "w-full h-full border-none";
+    frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+    frame.setAttribute("allowfullscreen", "true");
+
+    const frameContainer = document.getElementById('exam-frame-container');
+    frameContainer.innerHTML = "";
+    frameContainer.appendChild(frame);
     document.getElementById('exam-viewer').classList.remove('hidden-element');
 
-    // 3. TIMER INTERVAL
+    // TIMER
     if (window.examTimerInterval) clearInterval(window.examTimerInterval);
+
     window.examTimerInterval = setInterval(() => {
         if (!isExamActive) return;
-        let currentTime = Date.now();
-        let timeRemainingMs = endTime - currentTime;
-        let timeRemainingSec = Math.floor(timeRemainingMs / 1000);
 
-        // A. Cek apakah pengerjaan sudah berjalan 30 menit (1800 detik)
-        let secondsElapsed = Math.floor((currentTime - startTime) / 1000);
-        if (secondsElapsed >= 1800) {if (finishBtn) finishBtn.classList.remove('hidden-element');}
+        const currentTime = Date.now();
+        const timeRemainingMs = endTime - currentTime;
+        const timeRemainingSec = Math.floor(timeRemainingMs / 1000);
 
-        // B. Cek apakah waktu habis
-        if (timeRemainingSec <= 0) {clearInterval(window.examTimerInterval); finishExam(); alert("Waktu Habis!"); return; }
+        // Tombol Selesai mengikuti Master Setting.
+        const secondsElapsed = Math.floor((currentTime - startTime) / 1000);
+        const finishDelaySeconds = finishButtonMinutes * 60;
 
-        // C. Update Tampilan Timer
-        let m = String(Math.floor(timeRemainingSec / 60)).padStart(2, '0'); let s = String(timeRemainingSec % 60).padStart(2, '0');
-        document.getElementById('exam-timer').textContent = `${m}:${s}`; 
+        if (secondsElapsed >= finishDelaySeconds && finishBtn) {
+            finishBtn.classList.remove('hidden-element');
+        }
 
+        if (timeRemainingSec <= 0) {
+            clearInterval(window.examTimerInterval);
+            window.examTimerInterval = null;
+            finishExam();
+            return;
+        }
+
+        const m = String(Math.floor(timeRemainingSec / 60)).padStart(2, '0');
+        const s = String(timeRemainingSec % 60).padStart(2, '0');
+        const timer = document.getElementById('exam-timer');
+        if (timer) timer.textContent = `${m}:${s}`;
     }, 1000);
-    // Reset status resume setelah engine berjalan
+
     isResuming = false;
 }
 
 async function finishExam() {
     isExamActive = false;
-    // 1. Hentikan semua interval
-    if (window.examTimerInterval) clearInterval(window.examTimerInterval);
+
+    stopExamSecurity();
+
+    if (window.examTimerInterval) {
+        clearInterval(window.examTimerInterval);
+        window.examTimerInterval = null;
+    }
     if (monitorInterval) clearInterval(monitorInterval);
     if (studentSnapshotInterval) clearInterval(studentSnapshotInterval);
 
-    // 2. Matikan Kamera secara total
-    if (window.localStream) { window.localStream.getTracks().forEach(track => { track.stop(); track.enabled = false; }); window.localStream = null; }
-
-    // 3. Putuskan koneksi PeerJS
-    if (myPeer) { myPeer.destroy(); myPeer = null; }
-
-    // 4. Hapus data di database & LocalStorage
-    localStorage.removeItem('active_exam_state');
-    if (user?.id) {
-        try {await db.from('live').delete().eq('id', user.id);
-            // Kirim sinyal terakhir ke admin bahwa kita offline
-            monitorChannel.send({ type: 'broadcast', event: 'remove-card', payload: { userId: user.id.replace(/[^a-zA-Z0-9]/g, '') } });
-        } catch (e) { console.warn("Cleanup DB failed"); }
+    // Matikan kamera total.
+    if (window.localStream) {
+        window.localStream.getTracks().forEach(track => {
+            track.stop();
+            track.enabled = false;
+        });
+        window.localStream = null;
     }
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    alert("Ujian selesai! Pastikan jawaban anda sudah terkirim."); location.reload();
+
+    if (myPeer) {
+        myPeer.destroy();
+        myPeer = null;
+    }
+
+    localStorage.removeItem('active_exam_state');
+
+    if (user?.id) {
+        try {
+            await db.from('live').delete().eq('id', user.id);
+            if (monitorChannel) {
+                monitorChannel.send({
+                    type: 'broadcast',
+                    event: 'remove-card',
+                    payload: {
+                        userId: user.id.replace(/[^a-zA-Z0-9]/g, '')
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn("Cleanup DB failed");
+        }
+    }
+
+    if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+    }
+
+    alert("Ujian selesai! Pastikan jawaban Anda sudah terkirim.");
+    location.reload();
 }
 
 function confirmFinishExam() {
-    const inputPin = prompt("Masukkan PIN Pengawas untuk mengakhiri ujian:"); if (inputPin === null) return; // Jika menekan cancel
-    // Cek apakah PIN cocok dengan PIN Paket Ujian yang sedang aktif
+    const inputPin = prompt("Masukkan PIN Pengawas untuk mengakhiri ujian:");
+    if (inputPin === null) return;
+
     if (inputPin === activePin) {
-        if (confirm("PIN Benar. Apakah Anda yakin ingin mengakhiri ujian sekarang?")) finishExam();
-    } else { showNotify("PIN SALAH! Ujian tidak dapat diakhiri tanpa izin pengawas.", "error");
-        // Laporkan ke admin jika ada percobaan mematikan ujian secara paksa
+        if (confirm("PIN Benar. Apakah Anda yakin ingin mengakhiri ujian sekarang?")) {
+            finishExam();
+        }
+    } else {
+        showNotify("PIN SALAH! Ujian tidak dapat diakhiri tanpa izin pengawas.", "error");
         reportViolation("Mencoba Keluar Ujian (PIN Salah)");
     }
 }
@@ -1376,35 +1723,361 @@ async function clearClipboard() {
     }
 }
 
-let isSecuritySetup = false, blurTimer = null; 
+let isSecuritySetup = false, blurTimer = null;
+let examSecurityHandlers = null;
+let examWakeLock = null;
+let lastVisibilityViolation = 0;
+let lastFullscreenViolation = 0;
+let securityBaseline = { width: 0, height: 0, orientation: null };
+
+function isLockScreenVisible() {
+    const lock = document.getElementById('lock-screen');
+    return lock && !lock.classList.contains('hidden-element');
+}
+
+function reportSecurityViolationOnce(key, reason, cooldown = 5000) {
+    if (!isExamActive || isLockScreenVisible()) return;
+
+    const now = Date.now();
+    if (!window._securityViolationTimes) window._securityViolationTimes = {};
+
+    const previous = window._securityViolationTimes[key] || 0;
+    if (now - previous < cooldown) return;
+
+    window._securityViolationTimes[key] = now;
+    reportViolation(reason);
+}
+
+async function enterExamFullscreen() {
+    if (!isExamActive && document.getElementById('exam-viewer')?.classList.contains('hidden-element')) {
+        return false;
+    }
+
+    if (document.fullscreenElement) return true;
+
+    try {
+        if (document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen({ navigationUI: "hide" });
+            return true;
+        }
+    } catch (e) {
+        console.warn("Fullscreen tidak tersedia/ditolak browser:", e);
+    }
+
+    return false;
+}
+
+async function requestExamWakeLock() {
+    if (!isExamActive || !('wakeLock' in navigator)) return;
+
+    try {
+        if (!examWakeLock || examWakeLock.released) {
+            examWakeLock = await navigator.wakeLock.request('screen');
+
+            examWakeLock.addEventListener('release', () => {
+                examWakeLock = null;
+            });
+        }
+    } catch (e) {
+        console.warn("Wake Lock tidak tersedia:", e);
+    }
+}
+
+function stopExamSecurity() {
+    if (blurTimer) {
+        clearTimeout(blurTimer);
+        blurTimer = null;
+    }
+
+    if (examSecurityHandlers) {
+        window.removeEventListener('resize', examSecurityHandlers.resize);
+        window.removeEventListener('blur', examSecurityHandlers.blur);
+        window.removeEventListener('focus', examSecurityHandlers.focus);
+        window.removeEventListener('orientationchange', examSecurityHandlers.orientation);
+        window.removeEventListener('pagehide', examSecurityHandlers.pagehide);
+        document.removeEventListener('visibilitychange', examSecurityHandlers.visibility);
+        document.removeEventListener('fullscreenchange', examSecurityHandlers.fullscreen);
+        document.removeEventListener('copy', examSecurityHandlers.copy);
+        document.removeEventListener('cut', examSecurityHandlers.cut);
+        document.removeEventListener('paste', examSecurityHandlers.paste);
+        document.removeEventListener('contextmenu', examSecurityHandlers.contextmenu);
+        document.removeEventListener('selectstart', examSecurityHandlers.selectstart);
+        document.removeEventListener('dragstart', examSecurityHandlers.dragstart);
+        document.removeEventListener('touchmove', examSecurityHandlers.touchmove);
+
+        examSecurityHandlers = null;
+    }
+
+    window.onpopstate = null;
+    window.onkeydown = null;
+    document.body.style.webkitUserSelect = "";
+    document.body.style.userSelect = "";
+
+    if (examWakeLock) {
+        examWakeLock.release().catch(() => {});
+        examWakeLock = null;
+    }
+}
+
 function enableHardLockdown() {
-    if (isSecuritySetup) return;
-    for(let i=0; i<20; i++) {history.pushState({ exam: true }, null, location.href); }
-    window.onpopstate = () => history.pushState(null, null, location.href);
-    document.oncontextmenu = (e) => { e.preventDefault(); return false; }; document.body.style.webkitUserSelect = "none";
+    // Bersihkan handler ujian sebelumnya jika ada.
+    stopExamSecurity();
+
+    for (let i = 0; i < 20; i++) {
+        history.pushState({ exam: true }, null, location.href);
+    }
+
+    const handlers = {};
+
+    // Tombol BACK Android / browser.
+    window.onpopstate = () => {
+        if (!isExamActive) return;
+        history.pushState({ exam: true }, null, location.href);
+        reportSecurityViolationOnce(
+            "back",
+            "Mencoba Kembali / Keluar dari Ujian",
+            4000
+        );
+    };
+
+    // Keyboard fisik / Chromebook / desktop fallback.
     window.onkeydown = (e) => {
         if (!isExamActive) return;
-        if ([122, 123, 91, 92].includes(e.keyCode) || (e.ctrlKey && ['u','s','p','c','v'].includes(e.key.toLowerCase()))) { e.preventDefault(); reportViolation("Shortcut Terlarang"); return false; }
+
+        const key = (e.key || "").toLowerCase();
+        const blocked =
+            e.key === "F11" ||
+            e.key === "F12" ||
+            e.key === "Escape" ||
+            (e.ctrlKey && ["u", "s", "p", "c", "v", "x"].includes(key)) ||
+            (e.ctrlKey && e.shiftKey && ["i", "j", "c"].includes(key)) ||
+            (e.metaKey && ["c", "v", "x", "s", "p"].includes(key));
+
+        if (blocked) {
+            e.preventDefault();
+            e.stopPropagation();
+            reportSecurityViolationOnce("keyboard-" + key, "Shortcut Terlarang", 3000);
+            return false;
+        }
     };
-    window.onblur = () => { 
-        if (!isExamActive) return; 
+
+    // Blokir menu konteks, copy, cut, paste, select dan drag.
+    handlers.contextmenu = (e) => {
+        if (!isExamActive) return;
+        e.preventDefault();
+        reportSecurityViolationOnce("contextmenu", "Mencoba Membuka Menu Konteks", 5000);
+    };
+
+    handlers.copy = (e) => {
+        if (!isExamActive) return;
+        e.preventDefault();
+        reportSecurityViolationOnce("copy", "Mencoba Menyalin Teks", 5000);
+    };
+
+    handlers.cut = (e) => {
+        if (!isExamActive) return;
+        e.preventDefault();
+        reportSecurityViolationOnce("cut", "Mencoba Memotong Teks", 5000);
+    };
+
+    handlers.paste = (e) => {
+        if (!isExamActive) return;
+        e.preventDefault();
+        reportSecurityViolationOnce("paste", "Mencoba Menempelkan Data", 5000);
+    };
+
+    handlers.selectstart = (e) => {
+        if (!isExamActive) return;
+        e.preventDefault();
+    };
+
+    handlers.dragstart = (e) => {
+        if (!isExamActive) return;
+        e.preventDefault();
+    };
+
+    // Jangan menghentikan touchmove normal karena itu bisa merusak scrolling
+    // di Google Forms. Handler hanya mencatat jika browser melaporkan pola
+    // pinch/gesture yang tidak normal.
+    handlers.touchmove = (e) => {
+        if (!isExamActive) return;
+        if (e.touches && e.touches.length > 1) {
+            reportSecurityViolationOnce(
+                "multi-touch",
+                "Gesture Multi-Touch Terdeteksi",
+                5000
+            );
+        }
+    };
+
+    // Android app-switch / Home / Recent Apps / notification shade:
+    // visibilitychange adalah sinyal web yang paling berguna.
+    handlers.visibility = () => {
+        if (!isExamActive) return;
+
+        if (document.visibilityState === "hidden") {
+            lastVisibilityViolation = Date.now();
+            reportSecurityViolationOnce(
+                "visibility-hidden",
+                "Meninggalkan Layar Ujian / Beralih Aplikasi",
+                3000
+            );
+            return;
+        }
+
+        // Saat kembali ke PWA: minta fullscreen dan wake lock lagi.
         setTimeout(() => {
-            if (document.activeElement && ['IFRAME', 'INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) { if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; } return; }
-            blurTimer = setTimeout(() => { reportViolation("Kehilangan Fokus Layar"); }, 3000); 
+            if (!isExamActive) return;
+            enterExamFullscreen();
+            requestExamWakeLock();
+        }, 250);
+    };
+
+    // Blur sebagai sinyal tambahan. Tidak langsung menghukum agar tidak
+    // mudah false-positive dari keyboard/browser.
+    handlers.blur = () => {
+        if (!isExamActive) return;
+
+        if (blurTimer) clearTimeout(blurTimer);
+
+        blurTimer = setTimeout(() => {
+            if (!isExamActive) return;
+
+            // Jika halaman memang hidden, visibilitychange sudah mencatatnya.
+            if (document.visibilityState === "hidden") return;
+
+            reportSecurityViolationOnce(
+                "blur",
+                "Kehilangan Fokus Layar",
+                5000
+            );
+        }, 1200);
+    };
+
+    handlers.focus = () => {
+        if (blurTimer) {
+            clearTimeout(blurTimer);
+            blurTimer = null;
+        }
+
+        if (isExamActive) {
+            enterExamFullscreen();
+            requestExamWakeLock();
+        }
+    };
+
+    // Split-screen / resize Android.
+    handlers.resize = () => {
+        if (!isExamActive) return;
+
+        const active = document.activeElement;
+        const inputActive =
+            active &&
+            ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName);
+
+        const widthDiff = Math.abs(window.innerWidth - initialWidth);
+        const heightRatio = initialHeight > 0
+            ? window.innerHeight / initialHeight
+            : 1;
+
+        // Keyboard Android sering membuat tinggi viewport mengecil.
+        // Karena itu deteksi tinggi hanya dilakukan bila tidak ada input aktif.
+        if (widthDiff > 100) {
+            reportSecurityViolationOnce(
+                "split-width",
+                "Layar Terbagi / Split Screen Terdeteksi",
+                5000
+            );
+            initialWidth = window.innerWidth;
+        }
+
+        if (heightRatio < 0.65 && !inputActive && document.visibilityState === "visible") {
+            reportSecurityViolationOnce(
+                "split-height",
+                "Ukuran Layar Berubah Drastis / Split Screen",
+                5000
+            );
+        }
+    };
+
+    handlers.orientation = () => {
+        if (!isExamActive) return;
+
+        setTimeout(() => {
+            if (!isExamActive) return;
+
+            const current = screen.orientation
+                ? screen.orientation.type
+                : null;
+
+            if (
+                securityBaseline.orientation &&
+                current &&
+                current !== securityBaseline.orientation
+            ) {
+                reportSecurityViolationOnce(
+                    "orientation",
+                    "Orientasi Layar Berubah Saat Ujian",
+                    5000
+                );
+            }
         }, 500);
     };
-    // 2. DETEKSI SPLIT SCREEN (Sering digunakan di Android)
-    window.addEventListener('resize', () => {
+
+    // pagehide bukan pengganti visibilitychange, tetapi berguna sebagai
+    // sinyal tambahan ketika halaman ditinggalkan.
+    handlers.pagehide = () => {
         if (!isExamActive) return;
-        const widthDiff = Math.abs(window.innerWidth - initialWidth);
-        const isTooSmall = window.innerHeight < (initialHeight * 0.65);
-        const isInputActive = ['input', 'textarea'].includes(document.activeElement.tagName.toLowerCase());
-        // 1. Deteksi Perubahan Lebar (Split Screen Samping)
-        if (widthDiff > 100) {reportViolation("Layar Terbagi / Split Screen (Lebar)"); initialWidth = window.innerWidth; }
-        // Kita abaikan jika siswa sedang mengetik (keyboard muncul)
-        if (isTooSmall && !isInputActive) { reportViolation("Deteksi Layar Kecil / Split Screen (Tinggi)"); }
-    });
-    window.onfocus = () => { if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; } }; isSecuritySetup = true;
+        reportSecurityViolationOnce(
+            "pagehide",
+            "Halaman Ujian Meninggalkan Layar",
+            5000
+        );
+    };
+
+    handlers.fullscreen = () => {
+        if (!isExamActive) return;
+
+        if (!document.fullscreenElement) {
+            const now = Date.now();
+            if (now - lastFullscreenViolation < 2500) return;
+
+            lastFullscreenViolation = now;
+            reportViolation("Keluar dari Mode Layar Penuh");
+
+            // Minta kembali fullscreen setelah UI browser stabil.
+            setTimeout(() => {
+                if (isExamActive) enterExamFullscreen();
+            }, 500);
+        }
+    };
+
+    document.addEventListener('contextmenu', handlers.contextmenu, true);
+    document.addEventListener('copy', handlers.copy, true);
+    document.addEventListener('cut', handlers.cut, true);
+    document.addEventListener('paste', handlers.paste, true);
+    document.addEventListener('selectstart', handlers.selectstart, true);
+    document.addEventListener('dragstart', handlers.dragstart, true);
+    document.addEventListener('touchmove', handlers.touchmove, { passive: true });
+
+    document.addEventListener('visibilitychange', handlers.visibility);
+    document.addEventListener('fullscreenchange', handlers.fullscreen);
+
+    window.addEventListener('resize', handlers.resize);
+    window.addEventListener('blur', handlers.blur);
+    window.addEventListener('focus', handlers.focus);
+    window.addEventListener('orientationchange', handlers.orientation);
+    window.addEventListener('pagehide', handlers.pagehide);
+
+    examSecurityHandlers = handlers;
+    isSecuritySetup = true;
+
+    document.body.style.webkitUserSelect = "none";
+    document.body.style.userSelect = "none";
+
+    // Minta kembali fullscreen dan menjaga layar tetap menyala.
+    enterExamFullscreen();
+    requestExamWakeLock();
 }
 
 function initPeerConnection() {
@@ -1586,7 +2259,7 @@ async function startStudentBroadcast() {
 function captureSnapshot() {
     const video = document.getElementById('self-video'); if (!video || video.readyState < 2) return null;
     try { sharedCanvas.width = 160; sharedCanvas.height = 120; sharedCtx.drawImage(video, 0, 0, sharedCanvas.width, sharedCanvas.height); // Tetap di resolusi rendah untuk efisiensi bandwidth
-        return sharedCanvas.toDataURL('image/jpeg', 0.5); // Kualitas 0.5 sangat kecil ukurannya (sekitar 3-5 KB per gambar)
+        return sharedCanvas.toDataURL('image/jpeg', 0.2); // Kualitas 0.2 sangat kecil ukurannya (sekitar 3-5 KB per gambar)
     } catch (e) { return null; }
 }
 
@@ -1983,16 +2656,15 @@ async function generateAISoal() {
 // --- J. PENGATURAN AKHIR ---
 window.onbeforeunload = function() { if (isExamActive) return "Sedang Ujian!"; };
 
-document.addEventListener('fullscreenchange', () => {
-    if (isExamActive && !document.fullscreenElement) { 
-        // Siswa keluar dari fullscreen di HP
-        reportViolation("Keluar dari Mode Layar Penuh"); 
-        // Munculkan modal perintah untuk masuk fullscreen lagi
-        alert("PERINGATAN: Jangan keluar dari mode Fullscreen atau ujian akan terkunci!");
-        // Paksa masuk lagi
-        setTimeout(() => { document.documentElement.requestFullscreen().catch(() => {}); }, 1000); }
-});
-
+// PWA: daftarkan service worker. Ini membantu install/offline app shell,
+// tetapi TIDAK memberi Android-level kiosk/lock-task.
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => {
+            console.warn('Service Worker tidak aktif:', err);
+        });
+    });
+}
 
 window.addEventListener('error', (event) => { console.warn('System Note:', event.message); });
 window.addEventListener('unhandledrejection', (event) => { console.warn('Promise Note:', event.reason); });
