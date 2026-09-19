@@ -1,0 +1,12 @@
+{
+  "name": "PRIDA EXAMBRO",
+  "short_name": "EXAMBRO",
+  "description": "Secured Examination System 2026",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "icons": []
+}
