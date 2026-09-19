@@ -797,9 +797,42 @@ async function checkSupabaseConnection() {
 }
 
 async function upsertSettingsItem(settingId, data) {
-    let payload = { id: settingId, ...data }, res = await db.from('settings').upsert(payload, { onConflict: 'id' });
-    if (res.error && res.error.code === '42703') { payload = { key: settingId, ...data }; res = await db.from('settings').upsert(payload, { onConflict: 'key' }); }
-    if (res.error) throw res.error; return res;
+    // Jangan menggunakan upsert(onConflict) karena PostgREST akan mengembalikan
+    // HTTP 400 jika kolom konflik tidak memiliki UNIQUE/PK yang sesuai.
+    // Pola ini lebih kompatibel dengan tabel settings yang memakai id maupun key.
+    const findExisting = async (column) => {
+        return await db.from('settings').select('*').eq(column, settingId).maybeSingle();
+    };
+
+    let existing = await findExisting('id');
+    let identityColumn = 'id';
+
+    if (existing.error && ['42703', 'PGRST204'].includes(existing.error.code)) {
+        existing = await findExisting('key');
+        identityColumn = 'key';
+    }
+
+    if (existing.error) throw existing.error;
+
+    if (existing.data) {
+        const updatePayload = { ...data };
+        const result = await db.from('settings').update(updatePayload).eq(identityColumn, settingId).select().maybeSingle();
+        if (result.error) throw result.error;
+        return result;
+    }
+
+    // Jika baris belum ada, coba insert dengan kolom identitas yang ditemukan.
+    const insertPayload = { [identityColumn]: settingId, ...data };
+    let result = await db.from('settings').insert(insertPayload).select().maybeSingle();
+
+    // Jika skema ternyata memakai kolom identitas yang lain, coba sekali lagi.
+    if (result.error && identityColumn === 'id' && ['42703', 'PGRST204'].includes(result.error.code)) {
+        const fallbackPayload = { key: settingId, ...data };
+        result = await db.from('settings').insert(fallbackPayload).select().maybeSingle();
+    }
+
+    if (result.error) throw result.error;
+    return result;
 }
 
 async function cleanupLiveRows(createdBefore) {
@@ -847,7 +880,21 @@ function createCollectionWrapper(db) {
                     const getRow = async () => { let result = await queryKey('id'); if (result.error && result.error.code === '42703') result = await queryKey('key'); return result; };
                     const updateRow = async (data) => { let result = await db.from(name).update(data).eq('id', id); if (result.error && result.error.code === '42703') result = await db.from(name).update(data).eq('key', id); return result; };
                     const deleteRow = async () => { let result = await db.from(name).delete().eq('id', id); if (result.error && result.error.code === '42703') result = await db.from(name).delete().eq('key', id); return result; };
-                    const upsertRow = async (data) => { let payload = { ...data, id }; let result = await db.from(name).upsert(payload, { onConflict: 'id' }); if (result.error && result.error.code === '42703') { payload = { ...data, key: id }; result = await db.from(name).upsert(payload, { onConflict: 'key' }); } return result; };
+                    const upsertRow = async (data) => {
+                        let found = await db.from(name).select('*').eq('id', id).maybeSingle();
+                        let identity = 'id';
+                        if (found.error && ['42703', 'PGRST204'].includes(found.error.code)) {
+                            found = await db.from(name).select('*').eq('key', id).maybeSingle();
+                            identity = 'key';
+                        }
+                        if (found.error) return found;
+                        if (found.data) return await db.from(name).update(data).eq(identity, id).select().maybeSingle();
+                        let result = await db.from(name).insert({ ...data, [identity]: id }).select().maybeSingle();
+                        if (result.error && identity === 'id' && ['42703', 'PGRST204'].includes(result.error.code)) {
+                            result = await db.from(name).insert({ ...data, key: id }).select().maybeSingle();
+                        }
+                        return result;
+                    };
                     
                     return {
                         async get() { const { data, error } = await getRow(); if (error && error.code !== 'PGRST116') throw error; return { exists: !!data, data: () => { const { id: _id, ...rest } = data || {}; return rest; }, id }; },
