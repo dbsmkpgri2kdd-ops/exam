@@ -32,9 +32,9 @@
       "type": "image/png",
       "purpose": "any"
     }],
-    "screnshoots":[
+    "screnshots":[
     {
-      "src": "/screenshoots/screenshoot1.png",
+      "src": "/screenshots/screenshot1.png",
       "sizes": "540x720",
       "type": "image/png",
     }
