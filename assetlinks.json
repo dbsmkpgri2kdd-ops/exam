@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.web.examprida.twa",
+        "sha256_cert_fingerprints": ["08:3B:49:B0:F6:BB:86:1D:08:A4:1B:00:F0:33:5C:39:D0:6A:DB:4D:D4:10:7F:33:1F:12:E6:9F:00:10:97:E1"]
+      }
+    }]
