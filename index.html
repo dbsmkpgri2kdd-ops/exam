@@ -619,22 +619,6 @@
             Log Out
         </button>
     </header>
-	
-<!-- UNIT IKLAN BANNER DASHBOARD SISWA (RESPONSIVE) -->
-        <div class="mt-8 flex flex-col items-center justify-center">
-            <p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Informasi Sponsor</p>
-            <div class="w-full max-w-[320px] md:max-w-[728px] min-h-[50px] bg-white rounded-2xl border border-slate-100 shadow-sm p-1.5 flex items-center justify-center overflow-hidden">
-                <ins class="adsbygoogle"
-                     style="display:block"
-                     data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
-                     data-ad-slot="9876543210"
-                     data-ad-format="horizontal"
-                     data-full-width-responsive="true"></ins>
-                <script>
-                     (adsbygoogle = window.adsbygoogle || []).push({});
-                </script>
-            </div>
-        </div>
    
     <!-- Main Content: Max width di desktop agar tidak meluas -->
     <main class="p-4 md:p-8 max-w-5xl mx-auto">
@@ -692,13 +676,29 @@
                 <button onclick="tManualExam()" class="flex-[2] bg-indigo-600 text-white py-5 rounded-2xl font-black shadow-xl shadow-indigo-100 active:bg-indigo-700 transition-all uppercase text-xs tracking-widest order-1 md:order-2">Buka Link</button>
             </div>
         </div>
+		
+		<!-- Section: QR Reader Container -->
+            <div id="qr-reader-container" class="hidden-element bg-white p-6 md:p-8 rounded-[2.5rem] border shadow-xl mx-auto mb-8 text-center fade-in-up max-w-md">
+                <div id="qr-reader" class="rounded-[2rem] overflow-hidden mb-6 bg-slate-100 border-4 border-slate-50 shadow-inner"></div>
+                <button onclick="stopQR()" class="w-full bg-rose-50 text-rose-500 font-black text-[10px] uppercase tracking-widest py-4 rounded-2xl">Hentikan Kamera</button>
+            </div>
 
-        <!-- Section: QR Reader Container -->
-        <div id="qr-reader-container" class="hidden-element bg-white p-6 md:p-8 rounded-[2.5rem] border shadow-xl mx-auto mb-8 text-center fade-in-up max-w-md">
-            <div id="qr-reader" class="rounded-[2rem] overflow-hidden mb-6 bg-slate-100 border-4 border-slate-50 shadow-inner"></div>
-            <button onclick="stopQR()" class="w-full bg-rose-50 text-rose-500 font-black text-[10px] uppercase tracking-widest py-4 rounded-2xl">Hentikan Kamera</button>
-        </div>
-    </main>
+            <!-- UNIT IKLAN BANNER DASHBOARD SISWA PINDAH KE SINI -->
+            <div class="mt-8 flex flex-col items-center justify-center">
+                <p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Informasi Sponsor</p>
+                <div class="w-full max-w-[320px] md:max-w-[728px] min-h-[50px] bg-white rounded-2xl border border-slate-100 shadow-sm p-1.5 flex items-center justify-center overflow-hidden">
+                    <ins class="adsbygoogle"
+                         style="display:block"
+                         data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+                         data-ad-slot="9876543210"
+                         data-ad-format="horizontal"
+                         data-full-width-responsive="true"></ins>
+                    <script>
+                         (adsbygoogle = window.adsbygoogle || []).push({});
+                    </script>
+                </div>
+            </div>
+        </main>
 </div>
 
 <!-- EXAM VIEWER FRAME (Satu paket Kontainer + Header) -->
