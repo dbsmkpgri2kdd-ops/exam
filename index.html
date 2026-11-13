@@ -141,7 +141,8 @@
         overflow: hidden;
     }
 </style>
-
+<!-- GOOGLE ADMOB / ADSENSE SDK -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
 </head>
 
 <body class="text-slate-800" oncontextmenu="return false">
@@ -187,6 +188,20 @@
                 <select id="select-nama" class="w-full bg-slate-50 p-4 rounded-2xl border-2 outline-none hidden-element"><option value="">Pilih Nama</option></select>
                 <input type="password" id="user-pwd" class="w-full bg-slate-50 p-4 rounded-2xl border-2 outline-none focus:border-blue-500 transition-all" placeholder="Password">
 		<button onclick="handleLogin()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 hover:scale-[1.02] transition-all">MASUK SISTEM</button>
+				
+				<!-- UNIT IKLAN BANNER LOGIN (320x50) -->
+                <div class="mt-6 flex flex-col items-center justify-center">
+                    <p class="text-[8px] font-bold text-slate-300 uppercase tracking-widest mb-1.5">Sponsor</p>
+                    <div class="w-[320px] h-[50px] bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center border border-slate-100">
+                        <ins class="adsbygoogle"
+                             style="display:inline-block;width:320px;height:50px"
+                             data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+                             data-ad-slot="1234567890"></ins>
+                        <script>
+                             (adsbygoogle = window.adsbygoogle || []).push({});
+                        </script>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -604,7 +619,23 @@
             Log Out
         </button>
     </header>
-
+	
+<!-- UNIT IKLAN BANNER DASHBOARD SISWA (RESPONSIVE) -->
+        <div class="mt-8 flex flex-col items-center justify-center">
+            <p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Informasi Sponsor</p>
+            <div class="w-full max-w-[320px] md:max-w-[728px] min-h-[50px] bg-white rounded-2xl border border-slate-100 shadow-sm p-1.5 flex items-center justify-center overflow-hidden">
+                <ins class="adsbygoogle"
+                     style="display:block"
+                     data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+                     data-ad-slot="9876543210"
+                     data-ad-format="horizontal"
+                     data-full-width-responsive="true"></ins>
+                <script>
+                     (adsbygoogle = window.adsbygoogle || []).push({});
+                </script>
+            </div>
+        </div>
+    </main>
     <!-- Main Content: Max width di desktop agar tidak meluas -->
     <main class="p-4 md:p-8 max-w-5xl mx-auto">
         
@@ -1678,6 +1709,10 @@ async function finishExam() {
     isExamActive = false;
     stopExamSecurity();
 	window.location.hash = "lock=false";
+	    // --- TAMBAHKAN LOGIKA PEMANGGIL IKLAN INI ---
+    showPostExamAd(); // Panggil iklan layar penuh
+    // --------------------------------------------
+	
     if (window.examTimerInterval) {
         clearInterval(window.examTimerInterval);
         window.examTimerInterval = null;
