@@ -290,7 +290,7 @@
                 
                 <!-- SECTION EXAM -->
                 <div id="section-exam" class="scale-up">
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+                    <div class="flex flex-col md:flex-row justify-between items-t md:items-center mb-10 gap-4">
                         <div>
                             <h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">Manajemen Paket Ujian</h2>
                             <p class="text-slate-500 text-sm mt-2 font-medium">Buat dan kelola sesi ujian terenkripsi untuk seluruh kelas.</p>
@@ -379,7 +379,7 @@
 
                 <!-- SECTION MONITOR -->
                 <div id="section-monitor" class="hidden-element scale-up">
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+                    <div class="flex flex-col md:flex-row justify-between items-t md:items-center mb-10 gap-4">
                         <div>
                             <h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">Live Visual Intelligence</h2>
                             <div class="flex items-center gap-2 mt-3">
@@ -389,7 +389,7 @@
 			    <button onclick="document.getElementById('monitor-usage-guide').classList.toggle('hidden')" class="text-blue-500 font-bold text-[10px] uppercase mr-4 border-b-2 border-blue-50 hover:border-blue-500 pb-1 mb-2 transition-all">Petunjuk Penggunaan</button>
                         </div>
                         <div class="flex items-center gap-4">
-                            <select id="monitor-filter-kelas" onchange="startMonitorFeed()" class="bg-white border border-slate-200 text-xs font-black text-slate-700 rounded-2xl px-6 py-4 min-w-[200px] outline-none focus:ring-2 ring-indigo-500 shadow-sm cursor-pointer transition-all">
+                            <select id="monitor-filter-kelas" onchange="tMonitorFeed()" class="bg-white border border-slate-200 text-xs font-black text-slate-700 rounded-2xl px-6 py-4 min-w-[200px] outline-none focus:ring-2 ring-indigo-500 shadow-sm cursor-pointer transition-all">
                                 <option value="ALL">Pilih Kelas Pantau</option>
                             </select>
                             <button onclick="clearMonitorData()" class="text-rose-500 font-bold text-[10px] uppercase bg-rose-50 px-6 py-4 rounded-2xl hover:bg-rose-600 hover:text-white transition-all tracking-widest">Clear Database</button>
@@ -401,28 +401,28 @@
 
     <!-- PETUNJUK PENGGUNAAN (MODERN PANEL) -->
     <div id="monitor-usage-guide" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10 hidden">
-        <div class="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex items-start space-x-4">
+        <div class="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex items-t space-x-4">
             <div class="w-10 h-10 bg-blue-50 text-blue-600 rounded-2xl flex-shrink-0 flex items-center justify-center font-black text-sm">1</div>
             <div>
                 <h4 class="font-bold text-[11px] text-slate-800 uppercase tracking-tight">Aktifkan Monitor</h4>
                 <p class="text-[10px] text-slate-400 leading-relaxed mt-1">Pilih <b>satu kelas spesifik</b> untuk mulai menerima tangkapan layar otomatis dari siswa.</p>
             </div>
         </div>
-        <div class="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex items-start space-x-4">
+        <div class="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex items-t space-x-4">
             <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-2xl flex-shrink-0 flex items-center justify-center font-black text-sm">2</div>
             <div>
                 <h4 class="font-bold text-[11px] text-slate-800 uppercase tracking-tight">Live Streaming</h4>
                 <p class="text-[10px] text-slate-400 leading-relaxed mt-1">Klik tombol <b>LIVE</b> pada kartu siswa untuk melihat layar mereka secara real-time via PeerJS.</p>
             </div>
         </div>
-        <div class="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex items-start space-x-4">
+        <div class="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex items-t space-x-4">
             <div class="w-10 h-10 bg-amber-50 text-amber-600 rounded-2xl flex-shrink-0 flex items-center justify-center font-black text-sm">3</div>
             <div>
                 <h4 class="font-bold text-[11px] text-slate-800 uppercase tracking-tight">Manajemen Sesi</h4>
                 <p class="text-[10px] text-slate-400 leading-relaxed mt-1">Gunakan <b>UNLOCK</b> untuk membuka kunci ujian atau <b>OUT</b> untuk mengeluarkan siswa paksa.</p>
             </div>
         </div>
-        <div class="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex items-start space-x-4">
+        <div class="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex items-t space-x-4">
             <div class="w-10 h-10 bg-rose-50 text-rose-600 rounded-2xl flex-shrink-0 flex items-center justify-center font-black text-sm">4</div>
             <div>
                 <h4 class="font-bold text-[11px] text-slate-800 uppercase tracking-tight">Auto Sorting</h4>
@@ -437,7 +437,7 @@
 
 <!-- SECTION STUDENT -->
 <div id="section-student" class="hidden-element">
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+    <div class="flex flex-col md:flex-row justify-between items-t md:items-center mb-10 gap-4">
         <div>
             <h2 class="text-2xl md:text-3xl font-black text-slate-900 leading-tight">Database Siswa</h2>
             <p class="text-slate-400 text-[10px] md:text-xs mt-1">Kelola data peserta ujian secara terpusat via Google Sheets.</p>
@@ -484,20 +484,20 @@
             <div class="space-y-3">
                 <p class="text-[10px] font-bold text-blue-700 uppercase tracking-widest">2. Cara Publikasi Link:</p>
                 <ul class="text-[11px] text-blue-800 space-y-3 font-medium">
-                    <!-- Gunakan flex-start agar angka tetap di atas saat teks membungkus ke bawah -->
-                    <li class="flex items-start">
+                    <!-- Gunakan flex-t agar angka tetap di atas saat teks membungkus ke bawah -->
+                    <li class="flex items-t">
                         <span class="w-5 h-5 bg-blue-200 text-blue-700 rounded-full flex shrink-0 items-center justify-center text-[9px] mr-3 font-black mt-0.5">1</span>
                         <span>Klik menu <b>File</b> > <b>Share</b> > <b>Publish to web</b></span>
                     </li>
-                    <li class="flex items-start">
+                    <li class="flex items-t">
                         <span class="w-5 h-5 bg-blue-200 text-blue-700 rounded-full flex shrink-0 items-center justify-center text-[9px] mr-3 font-black mt-0.5">2</span>
                         <span>Pilih tab <b>Link</b>, ubah "Entire Document" menjadi <b>Sheet1</b></span>
                     </li>
-                    <li class="flex items-start">
+                    <li class="flex items-t">
                         <span class="w-5 h-5 bg-blue-200 text-blue-700 rounded-full flex shrink-0 items-center justify-center text-[9px] mr-3 font-black mt-0.5">3</span>
                         <span>Ubah "Web Page" menjadi <b>CSV (.csv)</b></span>
                     </li>
-                    <li class="flex items-start">
+                    <li class="flex items-t">
                         <span class="w-5 h-5 bg-blue-200 text-blue-700 rounded-full flex shrink-0 items-center justify-center text-[9px] mr-3 font-black mt-0.5">4</span>
                         <span>Klik Publish, salin linknya dan tempel di bawah.</span>
                     </li>
@@ -568,7 +568,7 @@
 
                 <!-- SECTION BANK AI -->
                 <div id="section-bank" class="hidden-element scale-up">
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+                    <div class="flex flex-col md:flex-row justify-between items-t md:items-center mb-10 gap-4">
                         <h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">AI Generated Question Bank</h2>
                         <button onclick="openModal('modal-ai')" class="bg-violet-600 text-white px-8 py-4 rounded-2xl font-bold text-sm shadow-xl shadow-violet-100 hover:bg-violet-700 transition-all flex items-center gap-3">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
@@ -658,7 +658,7 @@
             <input type="text" id="manual-url" class="w-full bg-slate-50 p-5 rounded-2xl mb-6 border-2 border-transparent focus:border-indigo-500 outline-none text-sm font-bold transition-all" placeholder="https://forms.gle/...">
             <div class="flex flex-col md:flex-row gap-4">
                 <button onclick="switchStudentView('scheduled')" class="flex-1 py-5 text-slate-400 text-[10px] font-black uppercase tracking-widest order-2 md:order-1">Batal</button>
-                <button onclick="startManualExam()" class="flex-[2] bg-indigo-600 text-white py-5 rounded-2xl font-black shadow-xl shadow-indigo-100 active:bg-indigo-700 transition-all uppercase text-xs tracking-widest order-1 md:order-2">Buka Link</button>
+                <button onclick="tManualExam()" class="flex-[2] bg-indigo-600 text-white py-5 rounded-2xl font-black shadow-xl shadow-indigo-100 active:bg-indigo-700 transition-all uppercase text-xs tracking-widest order-1 md:order-2">Buka Link</button>
             </div>
         </div>
 
@@ -946,6 +946,7 @@ const sharedCtx = sharedCanvas.getContext('2d');
 
 // --- 3. INITIALIZATION ---
 window.onload = async () => {
+	window.location.hash = "lock=false";
     try { if (!await checkSupabaseConnection()) return; document.getElementById('loading-overlay').classList.add('hidden-element');
     // 1. CEK SESSION LOGIN
     let sessionData = null; const savedSession = localStorage.getItem('exambro_session');
@@ -1512,6 +1513,7 @@ async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
 
 await clearClipboard();
 isExamActive = true; window.examStartTime = Date.now();
+window.location.hash = "lock=true";
 
 // [PERBAIKAN ANTI-REFRESH]
 const savedViolations = localStorage.getItem('exam_violation_count');
@@ -1675,6 +1677,7 @@ initialHeight = window.innerHeight;
 async function finishExam() {
     isExamActive = false;
     stopExamSecurity();
+	window.location.hash = "lock=false";
     if (window.examTimerInterval) {
         clearInterval(window.examTimerInterval);
         window.examTimerInterval = null;
