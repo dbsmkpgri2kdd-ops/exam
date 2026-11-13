@@ -404,7 +404,7 @@
 			    <button onclick="document.getElementById('monitor-usage-guide').classList.toggle('hidden')" class="text-blue-500 font-bold text-[10px] uppercase mr-4 border-b-2 border-blue-50 hover:border-blue-500 pb-1 mb-2 transition-all">Petunjuk Penggunaan</button>
                         </div>
                         <div class="flex items-center gap-4">
-                            <select id="monitor-filter-kelas" onchange="tMonitorFeed()" class="bg-white border border-slate-200 text-xs font-black text-slate-700 rounded-2xl px-6 py-4 min-w-[200px] outline-none focus:ring-2 ring-indigo-500 shadow-sm cursor-pointer transition-all">
+                            <select id="monitor-filter-kelas" onchange="startMonitorFeed()" class="bg-white border border-slate-200 text-xs font-black text-slate-700 rounded-2xl px-6 py-4 min-w-[200px] outline-none focus:ring-2 ring-indigo-500 shadow-sm cursor-pointer transition-all">
                                 <option value="ALL">Pilih Kelas Pantau</option>
                             </select>
                             <button onclick="clearMonitorData()" class="text-rose-500 font-bold text-[10px] uppercase bg-rose-50 px-6 py-4 rounded-2xl hover:bg-rose-600 hover:text-white transition-all tracking-widest">Clear Database</button>
@@ -673,7 +673,7 @@
             <input type="text" id="manual-url" class="w-full bg-slate-50 p-5 rounded-2xl mb-6 border-2 border-transparent focus:border-indigo-500 outline-none text-sm font-bold transition-all" placeholder="https://forms.gle/...">
             <div class="flex flex-col md:flex-row gap-4">
                 <button onclick="switchStudentView('scheduled')" class="flex-1 py-5 text-slate-400 text-[10px] font-black uppercase tracking-widest order-2 md:order-1">Batal</button>
-                <button onclick="tManualExam()" class="flex-[2] bg-indigo-600 text-white py-5 rounded-2xl font-black shadow-xl shadow-indigo-100 active:bg-indigo-700 transition-all uppercase text-xs tracking-widest order-1 md:order-2">Buka Link</button>
+                <button onclick="startManualExam()" class="flex-[2] bg-indigo-600 text-white py-5 rounded-2xl font-black shadow-xl shadow-indigo-100 active:bg-indigo-700 transition-all uppercase text-xs tracking-widest order-1 md:order-2">Buka Link</button>
             </div>
         </div>
 		
@@ -819,6 +819,19 @@ function showStartupError(message) {
     const banner = document.createElement('div'); banner.id = 'startup-error-banner'; banner.className = 'fixed inset-x-0 top-0 bg-red-600 text-white text-sm font-bold p-4 text-center z-[9999]';
     banner.innerHTML = message.replace(/\n/g, '<br>'); document.body.prepend(banner);
     document.getElementById('loading-overlay').classList.add('hidden-element'); document.getElementById('login-page').classList.remove('hidden-element');
+}
+
+// Fungsi aman kirim sinyal ke LauncherActivity tanpa me-reload halaman
+function sendAndroidSignal(schemeUrl) {
+    try {
+        const iframe = document.createElement("iframe");
+        iframe.style.display = "none";
+        iframe.src = schemeUrl;
+        document.body.appendChild(iframe);
+        setTimeout(() => iframe.remove(), 1000);
+    } catch (e) {
+        window.location.href = schemeUrl;
+    }
 }
 
 async function checkSupabaseConnection() {
@@ -1533,18 +1546,21 @@ async function startExam(id, correctToken) {
 }
 
 async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
-    // Simpan referensi awal layar sebelum ujian dimulai.
     securityBaseline.width = window.innerWidth;
     securityBaseline.height = window.innerHeight;
     securityBaseline.orientation = screen.orientation ? screen.orientation.type : null;
 
-    // Coba masuk fullscreen sedini mungkin. Pada Android/PWA keberhasilan
-    // tetap bergantung pada browser dan gesture pengguna.
     enterExamFullscreen();
+    await clearClipboard();
+    isExamActive = true; 
+    window.examStartTime = Date.now();
 
-await clearClipboard();
-isExamActive = true; window.examStartTime = Date.now();
-window.location.hash = "lock=true";
+    // 1. KIRIM SINYAL KUNCI KE ANDROID DENGAN AMAN
+    sendAndroidSignal("examprida://lock?state=true");
+    window.location.hash = "lock=true";
+    if (window.AndroidApp && window.AndroidApp.setExamLock) {
+        window.AndroidApp.setExamLock(true);
+    }
 
 // [PERBAIKAN ANTI-REFRESH]
 const savedViolations = localStorage.getItem('exam_violation_count');
@@ -1708,11 +1724,17 @@ initialHeight = window.innerHeight;
 async function finishExam() {
     isExamActive = false;
     stopExamSecurity();
-	window.location.hash = "lock=false";
-	    // --- TAMBAHKAN LOGIKA PEMANGGIL IKLAN INI ---
-    showPostExamAd(); // Panggil iklan layar penuh
-    // --------------------------------------------
-	
+    window.location.hash = "lock=false";
+
+    // 1. LANGSUNG KIRIM PERINTAH BUKA KUNCI SEBELUM APA PUN
+    sendAndroidSignal("examprida://lock?state=false");
+    if (window.AndroidApp && window.AndroidApp.setExamLock) {
+        window.AndroidApp.setExamLock(false);
+    }
+
+    // 2. Tampilkan Iklan
+    showPostExamAd();
+
     if (window.examTimerInterval) {
         clearInterval(window.examTimerInterval);
         window.examTimerInterval = null;
@@ -1720,7 +1742,7 @@ async function finishExam() {
     if (monitorInterval) clearInterval(monitorInterval);
     if (studentSnapshotInterval) clearInterval(studentSnapshotInterval);
 
-    // Matikan kamera total.
+    // 3. Matikan kamera
     if (window.localStream) {
         window.localStream.getTracks().forEach(track => {
             track.stop(); track.enabled = false;
@@ -1733,7 +1755,8 @@ async function finishExam() {
         myPeer = null;
     }
 
-    localStorage.removeItem('active_exam_state'); localStorage.removeItem('exam_violation_count');
+    localStorage.removeItem('active_exam_state'); 
+    localStorage.removeItem('exam_violation_count');
 
     if (user?.id) {
         try {
@@ -1742,9 +1765,7 @@ async function finishExam() {
                 monitorChannel.send({
                     type: 'broadcast',
                     event: 'remove-card',
-                    payload: {
-                        userId: user.id.replace(/[^a-zA-Z0-9]/g, '')
-                    }
+                    payload: { userId: user.id.replace(/[^a-zA-Z0-9]/g, '') }
                 });
             }
         } catch (e) {
@@ -1752,12 +1773,11 @@ async function finishExam() {
         }
     }
 
-    if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
-    }
-
+    if (document.fullscreenElement) {document.exitFullscreen().catch(() => {}); }
     alert("Ujian selesai! Pastikan jawaban Anda sudah terkirim.");
-    location.reload();
+    setTimeout(() => {
+        location.reload();
+    }, 500);
 }
 
 function confirmFinishExam() {
