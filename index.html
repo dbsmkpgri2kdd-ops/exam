@@ -142,7 +142,9 @@
     }
 </style>
 <!-- GOOGLE ADMOB / ADSENSE SDK -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1234567890123456" 
+        crossorigin="anonymous" 
+        data-adtest="on"></script>
 </head>
 
 <body class="text-slate-800" oncontextmenu="return false">
@@ -189,19 +191,24 @@
                 <input type="password" id="user-pwd" class="w-full bg-slate-50 p-4 rounded-2xl border-2 outline-none focus:border-blue-500 transition-all" placeholder="Password">
 		<button onclick="handleLogin()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 hover:scale-[1.02] transition-all">MASUK SISTEM</button>
 				
-				<!-- UNIT IKLAN BANNER LOGIN (320x50) -->
-                <div class="mt-6 flex flex-col items-center justify-center">
-                    <p class="text-[8px] font-bold text-slate-300 uppercase tracking-widest mb-1.5">Sponsor</p>
-                    <div class="w-[320px] h-[50px] bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center border border-slate-100">
-                        <ins class="adsbygoogle"
-                             style="display:inline-block;width:320px;height:50px"
-                             data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
-                             data-ad-slot="1234567890"></ins>
-                        <script>
-                             (adsbygoogle = window.adsbygoogle || []).push({});
-                        </script>
-                    </div>
-                </div>
+                <!-- UNIT IKLAN BANNER LOGIN (320x50 TEST MODE) -->
+	<div class="mt-6 flex flex-col items-center justify-center">
+	    <p class="text-[8px] font-bold text-slate-300 uppercase tracking-widest mb-1.5">Sponsor (Test Ad)</p>
+	    <div class="w-[320px] h-[50px] bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center border border-slate-700 shadow-sm">
+	        <ins class="adsbygoogle"
+	             style="display:inline-block;width:320px;height:50px"
+	             data-ad-client="ca-pub-1234567890123456"
+	             data-ad-slot="1234567890"
+	             data-adtest="on"></ins>
+	        <script>
+	             try {
+	                 (adsbygoogle = window.adsbygoogle || []).push({});
+	             } catch (e) {
+	                 console.log("AdMob Test bypass:", e);
+	             }
+	        </script>
+		    </div>
+		</div>
             </div>
         </div>
     </div>
@@ -683,23 +690,31 @@
                 <button onclick="stopQR()" class="w-full bg-rose-50 text-rose-500 font-black text-[10px] uppercase tracking-widest py-4 rounded-2xl">Hentikan Kamera</button>
             </div>
 
-            <!-- UNIT IKLAN BANNER DASHBOARD SISWA PINDAH KE SINI -->
-            <div class="mt-8 flex flex-col items-center justify-center">
-                <p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Informasi Sponsor</p>
-                <div class="w-full max-w-[320px] md:max-w-[728px] min-h-[50px] bg-white rounded-2xl border border-slate-100 shadow-sm p-1.5 flex items-center justify-center overflow-hidden">
-                    <ins class="adsbygoogle"
-                         style="display:block"
-                         data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
-                         data-ad-slot="9876543210"
-                         data-ad-format="horizontal"
-                         data-full-width-responsive="true"></ins>
-                    <script>
-                         (adsbygoogle = window.adsbygoogle || []).push({});
-                    </script>
-                </div>
-            </div>
+            <!-- UNIT IKLAN BANNER DASHBOARD SISWA (TEST MODE) -->
+	<div class="mt-8 flex flex-col items-center justify-center">
+	    <p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Informasi Sponsor (Test Ad)</p>
+	    <div class="w-full max-w-[320px] md:max-w-[728px] min-h-[50px] bg-slate-900 rounded-2xl border border-slate-700 p-1.5 flex items-center justify-center overflow-hidden">
+	        <ins class="adsbygoogle"
+	             style="display:inline-block;width:320px;height:50px"
+	             data-ad-client="ca-pub-1234567890123456"
+	             data-ad-slot="9876543210"
+	             data-adtest="on"></ins>
+	        <script>
+	             // Hanya panggil iklan jika container memiliki lebar > 0
+	             function loadStudentAd() {
+	                 try {
+	                     const ad = document.querySelector('#student-page ins.adsbygoogle');
+	                     if (ad && ad.offsetWidth > 0 && !ad.dataset.loaded) {
+	                         ad.dataset.loaded = "true";
+	                         (adsbygoogle = window.adsbygoogle || []).push({});
+	                     }
+	                 } catch (e) {}
+	             }
+		        </script>
+		    </div>
+		</div>
         </main>
-</div>
+	</div>
 
 <!-- EXAM VIEWER FRAME (Satu paket Kontainer + Header) -->
 <div id="exam-viewer" class="fixed inset-0 bg-white z-[80000] flex flex-col hidden-element">
@@ -1086,6 +1101,9 @@ async function renderClassCheckboxes(selectedClasses = []) {
 function showPage(id) {
     ['login-page','admin-page','student-page'].forEach(p => document.getElementById(p).classList.add('hidden-element'));
     document.getElementById(id).classList.remove('hidden-element');
+    if (id === 'student-page') {
+        setTimeout(loadStudentAd, 300);
+    }
 }
 
 function switchTab(t) {
