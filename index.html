@@ -838,14 +838,17 @@ function showStartupError(message) {
 
 // Fungsi aman kirim sinyal ke LauncherActivity tanpa me-reload halaman
 function sendAndroidSignal(schemeUrl) {
-    try {
+    // Cek apakah aplikasi berjalan di dalam Native Android (TWA)
+    if (window.AndroidApp && typeof window.AndroidApp.setExamLock !== "undefined") {
+        const isLock = schemeUrl.includes("state=true");
+        window.AndroidApp.setExamLock(isLock);
+    } else {
+        // Fallback untuk browser biasa
         const iframe = document.createElement("iframe");
         iframe.style.display = "none";
         iframe.src = schemeUrl;
         document.body.appendChild(iframe);
         setTimeout(() => iframe.remove(), 1000);
-    } catch (e) {
-        window.location.href = schemeUrl;
     }
 }
 
@@ -1925,6 +1928,20 @@ function stopExamSecurity() {
         examWakeLock = null;
     }
 }
+
+// Tambahkan ini di dalam bagian <script> Anda
+document.addEventListener("visibilitychange", () => {
+    if (isExamActive) {
+        if (document.visibilityState === "hidden") {
+            // Sinyal ke Android agar aplikasi tetap terbuka/fokus
+            sendAndroidSignal("examprida://lock?state=true");
+            reportViolation("Mencoba keluar dari aplikasi ujian!");
+        } else {
+            // Saat kembali ke aplikasi, paksa fullscreen lagi
+            enterExamFullscreen();
+        }
+    }
+});
 
 function enableHardLockdown() {
     // Bersihkan handler ujian sebelumnya jika ada.
