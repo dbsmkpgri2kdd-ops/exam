@@ -837,18 +837,20 @@ function showStartupError(message) {
 }
 
 // Fungsi aman kirim sinyal ke LauncherActivity tanpa me-reload halaman
+// Ganti fungsi lama dengan ini
 function sendAndroidSignal(schemeUrl) {
-    // Cek apakah aplikasi berjalan di dalam Native Android (TWA)
-    if (window.AndroidApp && typeof window.AndroidApp.setExamLock !== "undefined") {
+    // Mengecek apakah aplikasi berjalan di dalam WebView Android
+    if (typeof AndroidApp !== "undefined" && AndroidApp !== null) {
+        // Jika URL mengandung "state=true", maka kunci (lock), jika "state=false", buka (unlock)
         const isLock = schemeUrl.includes("state=true");
-        window.AndroidApp.setExamLock(isLock);
+        try {
+            AndroidApp.setExamLock(isLock);
+            console.log("Sinyal Kiosk Mode dikirim ke Android: Lock =", isLock);
+        } catch (e) {
+            console.error("Gagal memanggil setExamLock:", e);
+        }
     } else {
-        // Fallback untuk browser biasa
-        const iframe = document.createElement("iframe");
-        iframe.style.display = "none";
-        iframe.src = schemeUrl;
-        document.body.appendChild(iframe);
-        setTimeout(() => iframe.remove(), 1000);
+        console.log("Bukan di lingkungan Android Native (WebView).");
     }
 }
 
@@ -1008,23 +1010,77 @@ const sharedCtx = sharedCanvas.getContext('2d');
 
 // --- 3. INITIALIZATION ---
 window.onload = async () => {
-	window.location.hash = "lock=false";
-    try { if (!await checkSupabaseConnection()) return; document.getElementById('loading-overlay').classList.add('hidden-element');
-    // 1. CEK SESSION LOGIN
-    let sessionData = null; const savedSession = localStorage.getItem('exambro_session');
-        if (savedSession) { sessionData = JSON.parse(savedSession);
-            if (sessionData.role === 'admin') { user = { id: 'admin', nama: 'Administrator' }; currentRole = 'admin'; setRole('admin'); showPage('admin-page'); syncAdminData(); initAdminPeer(); startMonitorFeed();
-            } else if (sessionData.role === 'student' && sessionData.user) { user = sessionData.user; currentRole = 'student'; setRole('student'); document.getElementById('display-std-name').textContent = user.nama; showPage('student-page'); syncStudentData(); listenForAdminCommands(); }
+    // 1. Reset kunci di level Android saat pertama kali load
+    sendAndroidSignal("examprida://lock?state=false");
+    window.location.hash = "lock=false";
+
+    try {
+        if (!await checkSupabaseConnection()) return;
+        document.getElementById('loading-overlay').classList.add('hidden-element');
+
+        // --- 1. CEK SESSION LOGIN ---
+        let sessionData = null;
+        try {
+            const savedSession = localStorage.getItem('exambro_session');
+            if (savedSession) sessionData = JSON.parse(savedSession);
+        } catch (e) { localStorage.removeItem('exambro_session'); }
+
+        if (sessionData && sessionData.user) {
+            user = sessionData.user;
+            currentRole = sessionData.role;
+            setRole(currentRole);
+
+            if (currentRole === 'admin') {
+                showPage('admin-page');
+                syncAdminData();
+                initAdminPeer();
+                startMonitorFeed();
+            } else {
+                document.getElementById('display-std-name').textContent = user.nama;
+                showPage('student-page');
+                syncStudentData();
+                listenForAdminCommands();
+            }
+        } else {
+            setRole('student'); // Default view
         }
-        // 2. LOGIKA AUTO-RESUME UJIAN
-        const activeExam = localStorage.getItem('active_exam_state');
-        if (activeExam) {const examData = JSON.parse(activeExam); const now = Date.now();
-            if (now < examData.endTime) {isResuming = true; activePin = examData.pin; const remainingMinutes = Math.round((examData.endTime - now) / 60000); startExamEngine(examData.url, examData.mapel, examData.originalDur || remainingMinutes, examData.isCamera);
-            } else {localStorage.removeItem('active_exam_state');}
-        }
-        // 3. JALANKAN SERVICE DASAR
-        if (!sessionData || sessionData.role !== 'admin') { setRole('student'); }
-        syncSpecialSettings(); loadKelas(); startCleanupService(); loadSheetConfig();} catch (e) { console.error("Init Error:", e);}
+
+        // --- 2. LOGIKA AUTO-RESUME UJIAN ---
+        // Pindahkan ke dalam setTimeout agar UI sudah ter-render sempurna
+        setTimeout(async () => {
+            try {
+                const activeExam = localStorage.getItem('active_exam_state');
+                if (activeExam) {
+                    const examData = JSON.parse(activeExam);
+                    const now = Date.now();
+                    
+                    if (now < examData.endTime) {
+                        isResuming = true;
+                        activePin = examData.pin;
+                        const remainingMinutes = Math.round((examData.endTime - now) / 60000);
+                        
+                        // Berikan jeda singkat agar WebView siap menerima perintah kamera/lock
+                        startExamEngine(examData.url, examData.mapel, examData.originalDur || remainingMinutes, examData.isCamera, examData.examId);
+                    } else {
+                        localStorage.removeItem('active_exam_state');
+                    }
+                }
+            } catch (e) {
+                console.error("Resume Error:", e);
+                localStorage.removeItem('active_exam_state');
+            }
+        }, 500);
+
+        // --- 3. JALANKAN SERVICE DASAR ---
+        syncSpecialSettings();
+        loadKelas();
+        startCleanupService();
+        loadSheetConfig();
+
+    } catch (e) {
+        console.error("Init Error:", e);
+        showStartupError("Sistem gagal memuat konfigurasi utama.");
+    }
 };
 
 // --- B. AUTHENTICATION & ROLE MANAGEMENT ---
@@ -1567,203 +1623,146 @@ async function startExam(id, correctToken) {
 }
 
 async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
+    // 1. Inisialisasi State Keamanan
+    isExamActive = true; 
+    window.examStartTime = Date.now();
     securityBaseline.width = window.innerWidth;
     securityBaseline.height = window.innerHeight;
     securityBaseline.orientation = screen.orientation ? screen.orientation.type : null;
+    initialWidth = window.innerWidth;
+    initialHeight = window.innerHeight;
 
-    enterExamFullscreen();
+    // 2. Kunci Android & UI (Gunakan try-catch agar tidak memblokir jika bridge gagal)
+    try {
+        sendAndroidSignal("examprida://lock?state=true");
+        window.location.hash = "lock=true";
+    } catch (e) { console.error("Android Bridge Error:", e); }
+
     await clearClipboard();
-    isExamActive = true; 
-    window.examStartTime = Date.now();
 
-    // 1. KIRIM SINYAL KUNCI KE ANDROID DENGAN AMAN
-    sendAndroidSignal("examprida://lock?state=true");
-    window.location.hash = "lock=true";
-    if (window.AndroidApp && window.AndroidApp.setExamLock) {
-        window.AndroidApp.setExamLock(true);
-    }
-
-// [PERBAIKAN ANTI-REFRESH]
-const savedViolations = localStorage.getItem('exam_violation_count');
-if (isResuming && savedViolations !== null) {
-    violationCount = parseInt(savedViolations, 10) || 0;
-} else if (!isResuming) {
-    violationCount = 0;
-    localStorage.setItem('exam_violation_count', '0');
-}
-
-// Update badge angka pelanggaran di pojok layar jika siswa resume
-const vBadge = document.getElementById('violation-badge');
-if (vBadge && violationCount > 0) {
-    vBadge.classList.remove('hidden-element');
-    document.getElementById('violation-count').textContent = violationCount;
-}
-
-// Jika ternyata saat direfresh pelanggaran sudah >= 5, kunci lagi seketika!
-if (violationCount >= 5) {
-    setTimeout(() => triggerLock(), 300);
-}
-
-initialWidth = window.innerWidth;
-initialHeight = window.innerHeight;
-
-    // History trap dibuat saat ujian dimulai agar tombol Back Android
-    // tidak langsung meninggalkan halaman ujian.
-    for (let i = 0; i < 20; i++) {
-        history.pushState({ exam: true }, null, location.href);
-    }
-
+    // 3. Setup Kamera (Gunakan try-catch yang lebih ketat)
     const selfVideo = document.getElementById('self-video');
-    const finishBtn = document.getElementById('btn-finish-exam');
+    const cameraContainer = selfVideo.parentElement;
 
-    if (finishBtn) finishBtn.classList.add('hidden-element');
-
-    // LOGIKA KAMERA
-    if (isCameraRequired === false) {
-        if (window.localStream) {
-            window.localStream.getTracks().forEach(t => t.stop());
-            window.localStream = null;
-        }
-        selfVideo.srcObject = null;
-        selfVideo.parentElement.classList.add('hidden-element');
-    } else {
+    if (isCameraRequired) {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    width: { ideal: 120 },
-                    height: { ideal: 90 },
-                    frameRate: { max: 10 }
-                }
+                video: { width: { ideal: 120 }, height: { ideal: 90 }, frameRate: { max: 10 } }
             });
             window.localStream = stream;
             selfVideo.srcObject = stream;
-            selfVideo.parentElement.classList.remove('hidden-element');
+            cameraContainer.classList.remove('hidden-element');
             startStudentBroadcast();
         } catch (e) {
             isExamActive = false;
-            stopExamSecurity();
-            alert("⚠️ Ujian ini wajib kamera! Kamera tidak dapat digunakan.");
-            return;
+            alert("⚠️ Ujian wajib kamera! Silakan izinkan akses kamera.");
+            return; // Berhenti jika kamera gagal di perangkat wajib kamera
         }
+    } else {
+        cameraContainer.classList.add('hidden-element');
     }
 
+    // 4. Setup Logika Pelanggaran (Pembersihan state resume)
+    const savedViolations = parseInt(localStorage.getItem('exam_violation_count') || '0', 10);
+    violationCount = isResuming ? savedViolations : 0;
+    
+    const vBadge = document.getElementById('violation-badge');
+    if (vBadge) {
+        vBadge.classList.toggle('hidden-element', violationCount === 0);
+        document.getElementById('violation-count').textContent = violationCount;
+    }
+
+    if (violationCount >= 5) setTimeout(triggerLock, 300);
+
+    // 5. Setup Lockdown
     enableHardLockdown();
     requestExamWakeLock();
     enterExamFullscreen();
 
-    // LOGIKA WAKTU (Mendukung Refresh Halaman/Resume)
-    let now = Date.now();
-    let endTime;
-    let startTime;
-    let finishButtonMinutes;
+    // 6. Setup Waktu Ujian (Resume-proof)
+    let endTime, startTime, finishButtonMinutes;
 
     if (isResuming) {
-        const savedState = JSON.parse(localStorage.getItem('active_exam_state'));
+        try {
+            const savedState = JSON.parse(localStorage.getItem('active_exam_state'));
+            endTime = savedState.endTime;
+            startTime = savedState.startTime || (endTime - (savedState.originalDur * 60000));
+            finishButtonMinutes = savedState.finishButtonMinutes || 30;
+        } catch(e) { isResuming = false; }
+    }
 
-        endTime = savedState.endTime;
-        startTime = savedState.startTime ||
-            (savedState.endTime - (savedState.originalDur * 60 * 1000));
-
-        finishButtonMinutes = Number.isFinite(Number(savedState.finishButtonMinutes))
-            ? Math.max(0, Number(savedState.finishButtonMinutes))
-            : 30;
-    } else {
-        endTime = now + (dur * 60 * 1000);
-        startTime = now;
-
-        finishButtonMinutes = Number.isFinite(Number(specialSettings.finishButtonMinutes))
-            ? Math.max(0, Number(specialSettings.finishButtonMinutes))
-            : 30;
+    if (!isResuming) {
+        endTime = Date.now() + (dur * 60000);
+        startTime = Date.now();
+        finishButtonMinutes = Number(specialSettings.finishButtonMinutes) || 30;
 
         localStorage.setItem('active_exam_state', JSON.stringify({
-            url,
-            mapel,
-            startTime,
-            endTime,
-            isCamera: isCameraRequired,
-            pin: activePin,
-            examId: examId,
-            originalDur: dur,
-            finishButtonMinutes
+            url, mapel, startTime, endTime, isCamera: isCameraRequired,
+            pin: activePin, examId, originalDur: dur, finishButtonMinutes
         }));
     }
 
+    // 7. Render Iframe (Dengan perlindungan navigasi)
     document.getElementById('view-mapel').textContent = mapel;
-
-    // Iframe tetap mengizinkan fungsi yang umum dibutuhkan Google Forms/ujian,
-    // tetapi tidak memberi izin navigasi/top-level popup.
+    const frameContainer = document.getElementById('exam-frame-container');
     const frame = document.createElement('iframe');
     frame.src = url;
-    frame.allow = "camera; microphone";
-    frame.setAttribute(
-        "sandbox",
-        "allow-forms allow-scripts allow-same-origin allow-modals"
-    );
     frame.className = "w-full h-full border-none";
-    frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
-    frame.setAttribute("allowfullscreen", "true");
-
-    const frameContainer = document.getElementById('exam-frame-container');
+    frame.setAttribute("sandbox", "allow-forms allow-scripts allow-same-origin allow-modals");
+    frame.setAttribute("allow", "camera; microphone; fullscreen");
+    frame.setAttribute("referrerpolicy", "no-referrer");
+	
     frameContainer.innerHTML = "";
     frameContainer.appendChild(frame);
     document.getElementById('exam-viewer').classList.remove('hidden-element');
+    document.getElementById('btn-finish-exam').classList.add('hidden-element');
 
-    // TIMER
+    // 8. Timer Loop
     if (window.examTimerInterval) clearInterval(window.examTimerInterval);
-
     window.examTimerInterval = setInterval(() => {
-        if (!isExamActive) return;
+        if (!isExamActive) return clearInterval(window.examTimerInterval);
 
-        const currentTime = Date.now();
-        const timeRemainingMs = endTime - currentTime;
-        const timeRemainingSec = Math.floor(timeRemainingMs / 1000);
-
-        // Tombol Selesai mengikuti Master Setting.
-        const secondsElapsed = Math.floor((currentTime - startTime) / 1000);
-        const finishDelaySeconds = finishButtonMinutes * 60;
-
-        if (secondsElapsed >= finishDelaySeconds && finishBtn) {
-            finishBtn.classList.remove('hidden-element');
+        const remaining = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
+        const elapsedMin = (Date.now() - startTime) / 60000;
+        
+        // Munculkan tombol selesai setelah delay
+        if (elapsedMin >= finishButtonMinutes) {
+            document.getElementById('btn-finish-exam').classList.remove('hidden-element');
         }
 
-        if (timeRemainingSec <= 0) {
+        if (remaining === 0) {
             clearInterval(window.examTimerInterval);
-            window.examTimerInterval = null;
             finishExam();
-            return;
+        } else {
+            document.getElementById('exam-timer').textContent = 
+                `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}`;
         }
-
-        const m = String(Math.floor(timeRemainingSec / 60)).padStart(2, '0');
-        const s = String(timeRemainingSec % 60).padStart(2, '0');
-        const timer = document.getElementById('exam-timer');
-        if (timer) timer.textContent = `${m}:${s}`;
     }, 1000);
 
     isResuming = false;
 }
 
 async function finishExam() {
+    // 1. Matikan semua timer dan monitoring SEGERA
     isExamActive = false;
-    stopExamSecurity();
-    window.location.hash = "lock=false";
-
-    // 1. LANGSUNG KIRIM PERINTAH BUKA KUNCI SEBELUM APA PUN
-    sendAndroidSignal("examprida://lock?state=false");
-    if (window.AndroidApp && window.AndroidApp.setExamLock) {
-        window.AndroidApp.setExamLock(false);
-    }
-
-    // 2. Tampilkan Iklan
-    showPostExamAd();
-
-    if (window.examTimerInterval) {
-        clearInterval(window.examTimerInterval);
-        window.examTimerInterval = null;
-    }
+    if (window.examTimerInterval) clearInterval(window.examTimerInterval);
     if (monitorInterval) clearInterval(monitorInterval);
     if (studentSnapshotInterval) clearInterval(studentSnapshotInterval);
+    
+    // 2. Buka kunci Android SEGERA (Prioritas Utama)
+    try {
+        sendAndroidSignal("examprida://lock?state=false");
+        if (window.AndroidApp && window.AndroidApp.setExamLock) {
+            window.AndroidApp.setExamLock(false);
+        }
+    } catch (e) {
+        console.error("Gagal membuka kunci Android:", e);
+    }
+    
+    window.location.hash = "lock=false";
+    stopExamSecurity();
 
-    // 3. Matikan kamera
+    // 3. Matikan resource hardware (Kamera & PeerJS)
     if (window.localStream) {
         window.localStream.getTracks().forEach(track => {
             track.stop(); track.enabled = false;
@@ -1776,12 +1775,13 @@ async function finishExam() {
         myPeer = null;
     }
 
-    localStorage.removeItem('active_exam_state'); 
+    // 4. Bersihkan data sesi
+    localStorage.removeItem('active_exam_state');
     localStorage.removeItem('exam_violation_count');
 
+    // 5. Cleanup database secara async (tidak perlu menunggu selesai agar UI tidak lag)
     if (user?.id) {
-        try {
-            await db.from('live').delete().eq('id', user.id);
+        db.from('live').delete().eq('id', user.id).then(() => {
             if (monitorChannel) {
                 monitorChannel.send({
                     type: 'broadcast',
@@ -1789,16 +1789,23 @@ async function finishExam() {
                     payload: { userId: user.id.replace(/[^a-zA-Z0-9]/g, '') }
                 });
             }
-        } catch (e) {
-            console.warn("Cleanup DB failed");
-        }
+        }).catch(e => console.warn("Cleanup DB failed", e));
     }
 
-    if (document.fullscreenElement) {document.exitFullscreen().catch(() => {}); }
+    // 6. Keluar dari Fullscreen
+    if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+    }
+
+    // 7. Tampilkan iklan & Selesai
+    showPostExamAd();
+    
     alert("Ujian selesai! Pastikan jawaban Anda sudah terkirim.");
+    
+    // Memberikan jeda 800ms agar alert sempat terbaca sebelum reload
     setTimeout(() => {
-        location.reload();
-    }, 500);
+        window.location.reload();
+    }, 800);
 }
 
 function confirmFinishExam() {
