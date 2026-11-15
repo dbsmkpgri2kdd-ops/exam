@@ -714,17 +714,14 @@
                     </div>
                 </div>
 
-                <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
-                    <div class="flex items-center justify-between gap-3">
-                        <div>
-                            <p class="text-xs font-extrabold text-slate-800">3. Sinkron Email Google</p>
-                            <p class="text-[11px] text-slate-500">Agar Google Form tidak minta login ulang</p>
-                        </div>
-                        <span id="chk-email-badge" class="text-[11px] font-black text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg">Mengecek...</span>
+                <div class="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
+                    <div>
+                        <p class="text-xs font-extrabold text-slate-800">3. Sinkron Email Google</p>
+                        <p class="text-[11px] text-slate-500">Wajib login 1x agar Google Form sinkron otomatis</p>
                     </div>
-                    <div class="flex items-center justify-end gap-2">
-                        <button id="chk-email-confirm-btn" type="button" onclick="markGoogleEmailManualReady()" class="bg-slate-200 text-slate-700 px-3 py-1.5 rounded-xl text-[10px] font-bold">Sudah Login / Lewati</button>
-                        <button id="chk-email-btn" type="button" onclick="triggerChecklistGoogleSync()" class="bg-indigo-600 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold shadow">Sinkronkan Email</button>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <span id="chk-email-badge" class="text-[11px] font-black text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg">Mengecek...</span>
+                        <button id="chk-email-btn" type="button" onclick="triggerChecklistGoogleSync()" class="bg-indigo-600 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold shadow">Sinkronkan</button>
                     </div>
                 </div>
 
@@ -762,7 +759,7 @@
             <button id="btn-finish-exam" onclick="confirmFinishExam()" class="bg-rose-600 px-3 py-2 md:px-6 md:py-3 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest active:bg-rose-700 hidden-element">Selesai</button>
         </div>
     </header>
-    <div id="exam-frame-container" class="flex-grow bg-slate-100 relative">
+    <div id="exam-frame-container" class="flex-1 min-h-0 bg-slate-100 relative overflow-hidden">
         <!-- Iframe akan di-render di sini -->
     </div>
 </div>
@@ -864,7 +861,9 @@ function showStartupError(message) {
     console.error('Startup Error:', message); const existing = document.getElementById('startup-error-banner'); if (existing) existing.remove();
     const banner = document.createElement('div'); banner.id = 'startup-error-banner'; banner.className = 'fixed inset-x-0 top-0 bg-red-600 text-white text-sm font-bold p-4 text-center z-[9999]';
     banner.innerHTML = message.replace(/\n/g, '<br>'); document.body.prepend(banner);
-    document.getElementById('loading-overlay').classList.add('hidden-element'); document.getElementById('login-page').classList.remove('hidden-element');
+    document.getElementById('loading-overlay').classList.add('hidden-element');
+    ['admin-page','student-page','exam-viewer'].forEach(id => document.getElementById(id)?.classList.add('hidden-element'));
+    document.getElementById('login-page').classList.remove('hidden-element');
 }
 
 // Fungsi aman kirim sinyal ke LauncherActivity tanpa me-reload halaman
@@ -1096,12 +1095,16 @@ window.onload = async () => {
                         localStorage.removeItem('active_exam_state');
                     }
                 } else {
-                    const pendingChecklistRaw = sessionStorage.getItem("prida_pending_checklist");
+                    const pendingChecklistRaw = localStorage.getItem("prida_pending_checklist") || sessionStorage.getItem("prida_pending_checklist");
                     if (pendingChecklistRaw) {
                         const savedChk = JSON.parse(pendingChecklistRaw);
-                        if (savedChk && savedChk.url) {
+                        const notExpired = !savedChk?.savedAt || (Date.now() - savedChk.savedAt < 30 * 60 * 1000);
+                        if (savedChk && savedChk.url && notExpired) {
                             if (savedChk.pin) activePin = savedChk.pin;
                             openPreExamChecklist(savedChk.url, savedChk.mapel, savedChk.dur, savedChk.isCameraRequired, savedChk.examId);
+                        } else {
+                            localStorage.removeItem("prida_pending_checklist");
+                            sessionStorage.removeItem("prida_pending_checklist");
                         }
                     }
                 }
@@ -1198,11 +1201,12 @@ async function renderClassCheckboxes(selectedClasses = []) {
 
 // --- C. NAVIGATION & COMMON UI HELPERS ---
 function showPage(id) {
-    ['login-page','admin-page','student-page'].forEach(p => document.getElementById(p).classList.add('hidden-element'));
-    document.getElementById(id).classList.remove('hidden-element');
-    if (id === 'student-page') {
-        setTimeout(loadStudentAd, 300);
-    }
+    ['login-page','admin-page','student-page'].forEach(p => {
+        const el = document.getElementById(p);
+        if (el) el.classList.add('hidden-element');
+    });
+    const target = document.getElementById(id);
+    if (target) target.classList.remove('hidden-element');
 }
 
 function switchTab(t) {
@@ -1776,38 +1780,39 @@ function reloadExamFrame() {
     if (!container || !targetUrl) return;
 
     isReloadingExamFrame = true;
+    isReloading = true;
+    container.style.opacity = '1';
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '⟳ <span>Memuat...</span>';
     }
 
-    if (currentIframe) currentIframe.src = 'about:blank';
+    const loaderNote = document.createElement('div');
+    loaderNote.className = "absolute inset-0 flex flex-col items-center justify-center bg-slate-50 text-slate-500 text-xs font-bold z-0";
+    loaderNote.innerHTML = '<div class="w-8 h-8 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mb-3"></div><span>Memuat ulang soal ujian...</span>';
 
-    setTimeout(() => {
-        const newFrame = document.createElement('iframe');
-        newFrame.id = 'exam-iframe';
-        newFrame.src = targetUrl;
-        newFrame.setAttribute('data-exam-url', targetUrl);
-        newFrame.className = "w-full h-full border-none";
-        newFrame.setAttribute("sandbox", "allow-forms allow-scripts allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox");
-        newFrame.setAttribute("allow", "camera; microphone; fullscreen");
-        newFrame.setAttribute("referrerpolicy", "no-referrer");
+    const newFrame = document.createElement('iframe');
+    newFrame.id = 'exam-iframe';
+    newFrame.src = targetUrl;
+    newFrame.setAttribute('data-exam-url', targetUrl);
+    newFrame.className = "absolute inset-0 w-full h-full border-none bg-white z-10";
+    newFrame.setAttribute("sandbox", "allow-forms allow-scripts allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox");
+    newFrame.setAttribute("allow", "camera; microphone; fullscreen");
+    newFrame.setAttribute("referrerpolicy", "no-referrer");
 
-        const resetBtn = () => {
-            isReloadingExamFrame = false;
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '↻ <span>Refresh</span>';
-            }
-            window.focus();
-        };
+    const resetBtn = () => {
+        isReloadingExamFrame = false;
+        isReloading = false;
+        container.style.opacity = '1';
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '↻ <span>Refresh</span>';
+        }
+    };
 
-        newFrame.onload = resetBtn;
-        setTimeout(resetBtn, 4500);
-
-        container.innerHTML = "";
-        container.appendChild(newFrame);
-    }, 100);
+    newFrame.onload = resetBtn;
+    setTimeout(resetBtn, 5000);
+    container.replaceChildren(loaderNote, newFrame);
 }
 
 let pendingChecklistExam = null;
@@ -1897,27 +1902,24 @@ async function evaluateChecklistStates() {
     }
 
     if (hasNative && typeof window.AndroidApp.hasGoogleAccountCookie === "function") {
-        checklistEmailOk = Boolean(window.AndroidApp.hasGoogleAccountCookie()) || localStorage.getItem("prida_google_synced_manual") === "1";
+        checklistEmailOk = Boolean(window.AndroidApp.hasGoogleAccountCookie());
     } else {
         checklistEmailOk = localStorage.getItem("prida_google_synced_manual") === "1";
     }
 
     const emailBadge = document.getElementById("chk-email-badge");
     const emailBtn = document.getElementById("chk-email-btn");
-    const emailConfirmBtn = document.getElementById("chk-email-confirm-btn");
     if (emailBadge && emailBtn) {
         if (checklistEmailOk) {
-            emailBadge.textContent = "✓ Email Tersinkron";
+            emailBadge.textContent = "✓ Tersinkron";
             emailBadge.className = "text-[11px] font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg";
             emailBtn.textContent = "Ganti Akun";
-            emailBtn.className = "bg-slate-100 text-slate-600 px-3 py-1.5 rounded-xl text-[11px] font-bold";
-            if (emailConfirmBtn) emailConfirmBtn.classList.add("hidden-element");
+            emailBtn.className = "bg-slate-100 text-slate-600 px-2.5 py-1.5 rounded-xl text-[10px] font-bold";
         } else {
-            emailBadge.textContent = "Belum Sinkron";
-            emailBadge.className = "text-[11px] font-black text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg";
-            emailBtn.textContent = "Sinkronkan Email";
+            emailBadge.textContent = "Wajib Login";
+            emailBadge.className = "text-[11px] font-black text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg";
+            emailBtn.textContent = "Sinkronkan";
             emailBtn.className = "bg-indigo-600 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold shadow";
-            if (emailConfirmBtn) emailConfirmBtn.classList.remove("hidden-element");
         }
     }
 
@@ -1954,7 +1956,9 @@ async function grantChecklistCamera() {
 
 function triggerChecklistGoogleSync() {
     if (pendingChecklistExam) {
-        sessionStorage.setItem("prida_pending_checklist", JSON.stringify({ ...pendingChecklistExam, pin: activePin }));
+        const payload = JSON.stringify({ ...pendingChecklistExam, pin: activePin, savedAt: Date.now() });
+        localStorage.setItem("prida_pending_checklist", payload);
+        sessionStorage.setItem("prida_pending_checklist", payload);
     }
     if (window.AndroidApp && typeof window.AndroidApp.openGoogleAccountSync === "function") {
         window.AndroidApp.openGoogleAccountSync();
@@ -1963,11 +1967,6 @@ function triggerChecklistGoogleSync() {
         evaluateChecklistStates();
         window.open("https://accounts.google.com/ServiceLogin", "_blank");
     }
-}
-
-function markGoogleEmailManualReady() {
-    localStorage.setItem("prida_google_synced_manual", "1");
-    evaluateChecklistStates();
 }
 
 function openPreExamChecklist(url, mapel, dur, isCameraRequired, examId) {
@@ -1981,6 +1980,7 @@ function openPreExamChecklist(url, mapel, dur, isCameraRequired, examId) {
 
 function closePreExamChecklist() {
     pendingChecklistExam = null;
+    localStorage.removeItem("prida_pending_checklist");
     sessionStorage.removeItem("prida_pending_checklist");
     const modal = document.getElementById("pre-exam-checklist-modal");
     if (modal) modal.classList.add("hidden-element");
@@ -1989,6 +1989,7 @@ function closePreExamChecklist() {
 function proceedFromChecklistToPin() {
     if (!pendingChecklistExam) return;
     const cfg = { ...pendingChecklistExam };
+    localStorage.removeItem("prida_pending_checklist");
     sessionStorage.removeItem("prida_pending_checklist");
     const modal = document.getElementById("pre-exam-checklist-modal");
     if (modal) modal.classList.add("hidden-element");
@@ -2112,7 +2113,8 @@ async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
     frame.id = 'exam-iframe';
     frame.src = url;
     frame.setAttribute('data-exam-url', url);
-    frame.className = "w-full h-full border-none";
+    frameContainer.style.opacity = '1';
+    frame.className = "absolute inset-0 w-full h-full border-none bg-white z-10";
     frame.setAttribute("sandbox", "allow-forms allow-scripts allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox");
     frame.setAttribute("allow", "camera; microphone; fullscreen");
     frame.setAttribute("referrerpolicy", "no-referrer");
@@ -2394,9 +2396,6 @@ function enableHardLockdown() {
     window.onpopstate = () => {
         if (!isExamActive) return;
         history.pushState({ exam: true }, null, location.href);
-	history.pushState({ exam: true }, null, location.href);
-	history.pushState({ exam: true }, null, location.href);
-	window.history.forward();
     };
 
     // Keyboard fisik / Chromebook / desktop fallback.
@@ -2516,7 +2515,7 @@ handlers.blur = () => {
         const isTyping = ['INPUT', 'TEXTAREA', 'IFRAME'].includes(activeTag);
 
         // HANYA HUKUM JIKA TERTUTUP LEBIH DARI 50% (0.5) DAN BUKAN SEDANG KETIK SOAL
-        if (coveredRatio > 0.5 && !isTyping) {
+        if (coveredRatio > 0.5 && !isTyping && !isReloadingExamFrame) {
             // Butakan layar soal dari Google Assistant / Lens
             const frameContainer = document.getElementById('exam-frame-container');
             if (frameContainer) frameContainer.style.opacity = '0';
