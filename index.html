@@ -737,7 +737,8 @@
             <div class="bg-indigo-600 px-2 md:px-3 py-1 rounded-lg text-[8px] md:text-[10px] font-black uppercase truncate max-w-[80px] md:max-w-none" id="view-mapel">MAPEL</div>
             <div id="exam-timer" class="text-emerald-400 font-mono font-black text-base md:text-xl tracking-tighter bg-black/30 px-2 md:px-3 py-1 rounded-lg">00:00</div>
         </div>
-        <div class="flex items-center space-x-3">
+        <div class="flex items-center space-x-2 md:space-x-3">
+            <button id="btn-refresh-exam" type="button" onclick="reloadExamFrame()" class="bg-sky-600 active:bg-sky-700 px-2.5 py-2 md:px-4 md:py-2.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider flex items-center gap-1">↻ <span>Refresh</span></button>
             <div class="w-14 h-10 md:w-20 md:h-16 bg-black rounded-xl border border-white/20 overflow-hidden relative">
                 <video id="self-video" class="w-full h-full object-cover" autoplay muted playsinline></video>
                 <div id="violation-badge" class="absolute top-0.5 right-0.5 bg-rose-600 text-[8px] px-1.5 py-0.5 rounded-md font-black hidden-element animate-pulse">! <span id="violation-count">0</span></div>
@@ -1740,6 +1741,50 @@ function requestAndroidPinConfirmation() {
     });
 }
 
+let isReloadingExamFrame = false;
+function reloadExamFrame() {
+    if (!isExamActive || isReloadingExamFrame) return;
+    const container = document.getElementById('exam-frame-container');
+    const btn = document.getElementById('btn-refresh-exam');
+    const currentIframe = container ? container.querySelector('iframe') : null;
+    const targetUrl = window.currentExamUrl || (currentIframe ? currentIframe.getAttribute('data-exam-url') : '');
+    if (!container || !targetUrl) return;
+
+    isReloadingExamFrame = true;
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⟳ <span>Memuat...</span>';
+    }
+
+    if (currentIframe) currentIframe.src = 'about:blank';
+
+    setTimeout(() => {
+        const newFrame = document.createElement('iframe');
+        newFrame.id = 'exam-iframe';
+        newFrame.src = targetUrl;
+        newFrame.setAttribute('data-exam-url', targetUrl);
+        newFrame.className = "w-full h-full border-none";
+        newFrame.setAttribute("sandbox", "allow-forms allow-scripts allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox");
+        newFrame.setAttribute("allow", "camera; microphone; fullscreen");
+        newFrame.setAttribute("referrerpolicy", "no-referrer");
+
+        const resetBtn = () => {
+            isReloadingExamFrame = false;
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '↻ <span>Refresh</span>';
+            }
+            window.focus();
+        };
+
+        newFrame.onload = resetBtn;
+        setTimeout(resetBtn, 4500);
+
+        container.innerHTML = "";
+        container.appendChild(newFrame);
+    }, 100);
+}
+
 async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
     // 1. Setup Kamera terlebih dahulu sebelum mengunci Android
     const selfVideo = document.getElementById('self-video');
@@ -1782,6 +1827,7 @@ async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
     }
 
     isExamActive = true;
+    window.currentExamUrl = url;
     window.examStartTime = Date.now();
     securityBaseline.width = window.innerWidth;
     securityBaseline.height = window.innerHeight;
@@ -1845,7 +1891,9 @@ async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
     document.getElementById('view-mapel').textContent = mapel;
     const frameContainer = document.getElementById('exam-frame-container');
     const frame = document.createElement('iframe');
+    frame.id = 'exam-iframe';
     frame.src = url;
+    frame.setAttribute('data-exam-url', url);
     frame.className = "w-full h-full border-none";
     frame.setAttribute("sandbox", "allow-forms allow-scripts allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox");
     frame.setAttribute("allow", "camera; microphone; fullscreen");
