@@ -1672,6 +1672,74 @@ async function startExam(id, correctToken) {
     const doc = await publicData.collection('exams').doc(id).get(); if (doc.exists) { const x = doc.data(); activePin = x.pin || specialSettings.pin; startExamEngine(x.link, x.mapel, x.duration, x.camera, id); }
 }
 
+function abortPreExamCamera() {
+    const selfVideo = document.getElementById('self-video');
+    if (selfVideo) {
+        selfVideo.srcObject = null;
+        if (selfVideo.parentElement) {
+            selfVideo.parentElement.classList.add('hidden-element');
+        }
+    }
+    if (window.localStream) {
+        window.localStream.getTracks().forEach(track => {
+            track.stop();
+            track.enabled = false;
+        });
+        window.localStream = null;
+    }
+    if (typeof myPeer !== "undefined" && myPeer) {
+        try { myPeer.destroy(); } catch (e) {}
+        myPeer = null;
+    }
+}
+
+function requestAndroidPinConfirmation() {
+    return new Promise((resolve) => {
+        if (typeof AndroidApp === "undefined" || AndroidApp === null) {
+            resolve(true);
+            return;
+        }
+
+        if (typeof AndroidApp.requestExamPinLock === "function") {
+            let settled = false;
+            const cleanup = () => {
+                clearTimeout(timer);
+                if (window.onAndroidPinResult === handler) {
+                    delete window.onAndroidPinResult;
+                }
+            };
+            const handler = (accepted) => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                resolve(Boolean(accepted));
+            };
+            const timer = setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                const pinned = typeof AndroidApp.isScreenPinned === "function"
+                    ? Boolean(AndroidApp.isScreenPinned())
+                    : false;
+                cleanup();
+                resolve(pinned);
+            }, 45000);
+
+            window.onAndroidPinResult = handler;
+            try {
+                AndroidApp.requestExamPinLock();
+            } catch (e) {
+                settled = true;
+                cleanup();
+                resolve(false);
+            }
+            return;
+        }
+
+        sendAndroidSignal("examprida://lock?state=true");
+        resolve(true);
+    });
+}
+
 async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
     // 1. Setup Kamera terlebih dahulu sebelum mengunci Android
     const selfVideo = document.getElementById('self-video');
@@ -1685,7 +1753,6 @@ async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
             window.localStream = stream;
             selfVideo.srcObject = stream;
             cameraContainer.classList.remove('hidden-element');
-            startStudentBroadcast();
         } catch (e) {
             isExamActive = false;
             isResuming = false;
@@ -1697,7 +1764,23 @@ async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
         cameraContainer.classList.add('hidden-element');
     }
 
-    // 2. Inisialisasi State Keamanan (baru diaktifkan setelah kamera siap)
+    // 2. Wajib konfirmasi notifikasi Sematkan Layar (Pin) Android sebelum masuk mode ujian
+    const isPinAccepted = await requestAndroidPinConfirmation();
+    if (!isPinAccepted) {
+        isExamActive = false;
+        isResuming = false;
+        abortPreExamCamera();
+        sendAndroidSignal("examprida://lock?state=false");
+        window.location.hash = "lock=false";
+        showNotify("Ujian dibatalkan! Anda wajib menekan OKE pada notifikasi Sematkan Layar (Pin) untuk memulai ujian.", "error");
+        return; // Tetap di Dashboard Siswa
+    }
+
+    // 3. Baru aktifkan broadcast kamera & state ujian setelah Pin disetujui
+    if (isCameraRequired) {
+        startStudentBroadcast();
+    }
+
     isExamActive = true;
     window.examStartTime = Date.now();
     securityBaseline.width = window.innerWidth;
@@ -1706,9 +1789,7 @@ async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
     initialWidth = window.innerWidth;
     initialHeight = window.innerHeight;
 
-    // 3. Kunci Android & UI
     try {
-        sendAndroidSignal("examprida://lock?state=true");
         window.location.hash = "lock=true";
     } catch (e) {
         console.error("Android Bridge Error:", e);
