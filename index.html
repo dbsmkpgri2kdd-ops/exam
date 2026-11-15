@@ -1095,6 +1095,15 @@ window.onload = async () => {
                     } else {
                         localStorage.removeItem('active_exam_state');
                     }
+                } else {
+                    const pendingChecklistRaw = sessionStorage.getItem("prida_pending_checklist");
+                    if (pendingChecklistRaw) {
+                        const savedChk = JSON.parse(pendingChecklistRaw);
+                        if (savedChk && savedChk.url) {
+                            if (savedChk.pin) activePin = savedChk.pin;
+                            openPreExamChecklist(savedChk.url, savedChk.mapel, savedChk.dur, savedChk.isCameraRequired, savedChk.examId);
+                        }
+                    }
                 }
             } catch (e) {
                 console.error("Resume Error:", e);
@@ -1993,6 +2002,156 @@ async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
     }
     openPreExamChecklist(url, mapel, dur, isCameraRequired, examId);
 }
+
+async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
+    // 1. Setup Kamera terlebih dahulu sebelum mengunci Android
+    const selfVideo = document.getElementById('self-video');
+    const cameraContainer = selfVideo.parentElement;
+
+    if (isCameraRequired) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 120 }, height: { ideal: 90 }, frameRate: { max: 10 } }
+            });
+            window.localStream = stream;
+            selfVideo.srcObject = stream;
+            cameraContainer.classList.remove('hidden-element');
+        } catch (e) {
+            isExamActive = false;
+            isResuming = false;
+            sendAndroidSignal("examprida://lock?state=false");
+            showNotify("⚠️ Ujian wajib kamera! Silakan izinkan akses kamera terlebih dahulu.", "error");
+            return;
+        }
+    } else {
+        cameraContainer.classList.add('hidden-element');
+    }
+
+    // 2. Wajib konfirmasi notifikasi Sematkan Layar (Pin) Android sebelum masuk mode ujian
+    const isPinAccepted = await requestAndroidPinConfirmation();
+    if (!isPinAccepted) {
+        isExamActive = false;
+        isResuming = false;
+        abortPreExamCamera();
+        sendAndroidSignal("examprida://lock?state=false");
+        window.location.hash = "lock=false";
+        showNotify("Ujian dibatalkan! Anda wajib menekan OKE pada notifikasi Sematkan Layar (Pin) untuk memulai ujian.", "error");
+        return;
+    }
+
+    // 3. Baru aktifkan broadcast kamera & state ujian setelah Pin disetujui
+    if (isCameraRequired) {
+        startStudentBroadcast();
+    }
+
+    isExamActive = true;
+    window.currentExamUrl = url;
+    window.examStartTime = Date.now();
+    securityBaseline.width = window.innerWidth;
+    securityBaseline.height = window.innerHeight;
+    securityBaseline.orientation = screen.orientation ? screen.orientation.type : null;
+    initialWidth = window.innerWidth;
+    initialHeight = window.innerHeight;
+
+    try {
+        window.location.hash = "lock=true";
+    } catch (e) {
+        console.error("Android Bridge Error:", e);
+    }
+
+    await clearClipboard();
+
+    // 4. Setup Logika Pelanggaran
+    const savedViolations = parseInt(localStorage.getItem('exam_violation_count') || '0', 10);
+    violationCount = isResuming ? savedViolations : 0;
+
+    const vBadge = document.getElementById('violation-badge');
+    if (vBadge) {
+        vBadge.classList.toggle('hidden-element', violationCount === 0);
+        document.getElementById('violation-count').textContent = violationCount;
+    }
+
+    if (violationCount >= 5) setTimeout(triggerLock, 300);
+
+    // 5. Setup Lockdown
+    enableHardLockdown();
+    requestExamWakeLock();
+    enterExamFullscreen();
+
+    // 6. Setup Waktu Ujian
+    let endTime, startTime, finishButtonMinutes;
+
+    if (isResuming) {
+        try {
+            const savedState = JSON.parse(localStorage.getItem('active_exam_state'));
+            endTime = savedState.endTime;
+            startTime = savedState.startTime || (endTime - (savedState.originalDur * 60000));
+            const savedDelay = Number(savedState.finishButtonMinutes);
+            finishButtonMinutes = Number.isFinite(savedDelay) ? Math.max(0, savedDelay) : 30;
+        } catch (e) {
+            isResuming = false;
+        }
+    }
+
+    if (!isResuming) {
+        endTime = Date.now() + (dur * 60000);
+        startTime = Date.now();
+        const cfgDelay = Number(specialSettings.finishButtonMinutes);
+        finishButtonMinutes = Number.isFinite(cfgDelay) ? Math.max(0, cfgDelay) : 30;
+
+        localStorage.setItem('active_exam_state', JSON.stringify({
+            url, mapel, startTime, endTime, isCamera: isCameraRequired,
+            pin: activePin, examId, originalDur: dur, finishButtonMinutes
+        }));
+    }
+
+    // 7. Render Iframe
+    document.getElementById('view-mapel').textContent = mapel;
+    const frameContainer = document.getElementById('exam-frame-container');
+    const frame = document.createElement('iframe');
+    frame.id = 'exam-iframe';
+    frame.src = url;
+    frame.setAttribute('data-exam-url', url);
+    frame.className = "w-full h-full border-none";
+    frame.setAttribute("sandbox", "allow-forms allow-scripts allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox");
+    frame.setAttribute("allow", "camera; microphone; fullscreen");
+    frame.setAttribute("referrerpolicy", "no-referrer");
+
+    frameContainer.innerHTML = "";
+    frameContainer.appendChild(frame);
+    document.getElementById('exam-viewer').classList.remove('hidden-element');
+
+    const btnFinish = document.getElementById('btn-finish-exam');
+    if (finishButtonMinutes === 0) {
+        btnFinish.classList.remove('hidden-element');
+    } else {
+        btnFinish.classList.add('hidden-element');
+    }
+
+    // 8. Timer Loop
+    if (window.examTimerInterval) clearInterval(window.examTimerInterval);
+    window.examTimerInterval = setInterval(() => {
+        if (!isExamActive) return clearInterval(window.examTimerInterval);
+
+        const remaining = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
+        const elapsedMin = (Date.now() - startTime) / 60000;
+
+        if (elapsedMin >= finishButtonMinutes) {
+            btnFinish.classList.remove('hidden-element');
+        }
+
+        if (remaining === 0) {
+            clearInterval(window.examTimerInterval);
+            finishExam();
+        } else {
+            document.getElementById('exam-timer').textContent =
+                `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}`;
+        }
+    }, 1000);
+
+    isResuming = false;
+}
+
 async function finishExam() {
     isExamActive = false;
     if (window.examTimerInterval) clearInterval(window.examTimerInterval);
