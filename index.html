@@ -1723,52 +1723,7 @@ function abortPreExamCamera() {
     }
 }
 
-function requestAndroidPinConfirmation() {
-    return new Promise((resolve) => {
-        if (typeof AndroidApp === "undefined" || AndroidApp === null) {
-            resolve(true);
-            return;
-        }
 
-        if (typeof AndroidApp.requestExamPinLock === "function") {
-            let settled = false;
-            const cleanup = () => {
-                clearTimeout(timer);
-                if (window.onAndroidPinResult === handler) {
-                    delete window.onAndroidPinResult;
-                }
-            };
-            const handler = (accepted) => {
-                if (settled) return;
-                settled = true;
-                cleanup();
-                resolve(Boolean(accepted));
-            };
-            const timer = setTimeout(() => {
-                if (settled) return;
-                settled = true;
-                const pinned = typeof AndroidApp.isScreenPinned === "function"
-                    ? Boolean(AndroidApp.isScreenPinned())
-                    : false;
-                cleanup();
-                resolve(pinned);
-            }, 45000);
-
-            window.onAndroidPinResult = handler;
-            try {
-                AndroidApp.requestExamPinLock();
-            } catch (e) {
-                settled = true;
-                cleanup();
-                resolve(false);
-            }
-            return;
-        }
-
-        sendAndroidSignal("examprida://lock?state=true");
-        resolve(true);
-    });
-}
 
 let isReloadingExamFrame = false;
 function reloadExamFrame() {
@@ -1785,7 +1740,6 @@ function reloadExamFrame() {
         btn.innerHTML = '⟳ <span>Memuat...</span>';
     }
 
-    // Refresh langsung pada iframe yang sama agar tidak terjadi layar putih
     iframe.src = targetUrl;
 
     setTimeout(() => {
@@ -2010,7 +1964,7 @@ async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
         cameraContainer.classList.add('hidden-element');
     }
 
-    // 2. Langsung kunci sistem dan masuk ujian (Tanpa popup Pin Android ganda)
+    // 2. Langsung kunci sistem & aktifkan Kiosk Mode (Tanpa popup Pin Android ganda)
     sendAndroidSignal("examprida://lock?state=true");
     if (window.AndroidApp && typeof window.AndroidApp.setExamLock === "function") {
         window.AndroidApp.setExamLock(true);
