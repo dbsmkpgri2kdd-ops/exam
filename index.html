@@ -1983,16 +1983,13 @@ async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
         cameraContainer.classList.add('hidden-element');
     }
 
-    // 2. Langsung Kunci Sistem Native (1x saja, tanpa popup Pin)
-	if (window.AndroidApp && typeof window.AndroidApp.setExamLock === "function") {
-	    window.AndroidApp.setExamLock(true);
-	} else {
-	    sendAndroidSignal("examprida://lock?state=true");
-	}
-
-	if (isCameraRequired) {
-        startStudentBroadcast();
-	}
+    // 2. Langsung Kunci Sistem Native (1x saja, tanpa hash duplikat)
+    if (window.AndroidApp && typeof window.AndroidApp.setExamLock === "function") {
+        window.AndroidApp.setExamLock(true);
+    } else {
+        sendAndroidSignal("examprida://lock?state=true");
+        try { window.location.hash = "lock=true"; } catch (e) {}
+    }
 
     isExamActive = true;
     window.currentExamUrl = url;
@@ -2003,13 +2000,6 @@ async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
     securityBaseline.orientation = screen.orientation ? screen.orientation.type : null;
     initialWidth = window.innerWidth;
     initialHeight = window.innerHeight;
-
-    try {
-        window.location.hash = "lock=true";
-    } catch (e) {
-        console.error("Android Bridge Error:", e);
-    }
-
     await clearClipboard();
 
     // 3. Setup Logika Pelanggaran
@@ -2121,9 +2111,11 @@ async function finishExam() {
 
     // Buka kunci Android SEGERA
     try {
-        sendAndroidSignal("examprida://lock?state=false");
-        if (window.AndroidApp && window.AndroidApp.setExamLock) {
+        if (window.AndroidApp && typeof window.AndroidApp.setExamLock === "function") {
             window.AndroidApp.setExamLock(false);
+        } else {
+            sendAndroidSignal("examprida://lock?state=false");
+            window.location.hash = "lock=false";
         }
     } catch (e) {
         console.error("Gagal membuka kunci Android:", e);
@@ -2212,9 +2204,11 @@ function submitFinishPin() {
 }
 
 async function clearClipboard() {
-    try { await navigator.clipboard.writeText(" "); } catch (err) {
-        try { const input = document.createElement("input"); input.value = " "; document.body.appendChild(input); input.select(); document.execCommand("copy"); document.body.removeChild(input); } catch (e) {}
-    }
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(" ");
+        }
+    } catch (e) {}
 }
 		
 // Fungsi Menampilkan Iklan Setelah Ujian
@@ -2281,7 +2275,9 @@ async function enterExamFullscreen() {
     if (!isExamActive && document.getElementById('exam-viewer')?.classList.contains('hidden-element')) {
         return false;
     }
-
+    if (window.AndroidApp && typeof window.AndroidApp.isNativeApp === "function") {
+        return true;
+    }
     if (document.fullscreenElement) return true;
 
     try {
@@ -2292,7 +2288,6 @@ async function enterExamFullscreen() {
     } catch (e) {
         console.warn("Fullscreen tidak tersedia/ditolak browser:", e);
     }
-
     return false;
 }
 
@@ -2455,48 +2450,34 @@ function enableHardLockdown() {
         }, 250);
     };
 
-    // Blur sebagai sinyal tambahan. Tidak langsung menghukum agar tidak
-    // KODE BARU:
-handlers.blur = () => {
-    if (!isExamActive) return;
-
-    if (blurTimer) clearTimeout(blurTimer);
-
-    blurTimer = setTimeout(() => {
+	// Blur sebagai sinyal tambahan. Tidak langsung menghukum agar tidak
+	handlers.blur = () => {
         if (!isExamActive) return;
+        if (blurTimer) clearTimeout(blurTimer);
 
-        // Jika aplikasi benar-benar di-minimize/pindah tab, visibilitychange yang akan menghukum
-        if (document.visibilityState === "hidden") return;
+        blurTimer = setTimeout(() => {
+            if (!isExamActive || isLockScreenVisible()) return;
+            if (Date.now() - (window.examStartTime || 0) < 5000) return;
+            if (document.visibilityState === "hidden") return;
 
-        // Hitung tinggi layar asli vs area aktif yang tersisa
-        const totalHeight = window.screen.height || window.outerHeight || initialHeight;
-        const currentVisibleHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-
-        // Rasio bagian layar yang tertutup oleh pop-up/AI
-        const coveredRatio = (totalHeight - currentVisibleHeight) / totalHeight;
-
-        // Cek apakah siswa sedang mengetik (agar keyboard virtual tidak dianggap curang)
-        const activeTag = document.activeElement ? document.activeElement.tagName : '';
-        const isTyping = ['INPUT', 'TEXTAREA', 'IFRAME'].includes(activeTag);
-
-        // HANYA HUKUM JIKA TERTUTUP LEBIH DARI 50% (0.5) DAN BUKAN SEDANG KETIK SOAL
-        if (coveredRatio > 0.5 && !isTyping && !isReloadingExamFrame) {
-            // Butakan layar soal dari Google Assistant / Lens
-            const frameContainer = document.getElementById('exam-frame-container');
-            if (frameContainer) frameContainer.style.opacity = '0';
-
-            reportSecurityViolationOnce(
-                "blur-overlay",
-                "Layar Tertutup > 50% (Asisten AI / Pop-up Terdeteksi)",
-                3000
-            );
-        } else {
-            // Jika tertutup di bawah 50%, layar tetap aman ditampilkan
             const frameContainer = document.getElementById('exam-frame-container');
             if (frameContainer) frameContainer.style.opacity = '1';
-        }
-    }, 600);
-};
+
+            const totalHeight = window.screen.height || window.outerHeight || initialHeight;
+            const currentVisibleHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+            const coveredRatio = (totalHeight - currentVisibleHeight) / totalHeight;
+            const activeTag = document.activeElement ? document.activeElement.tagName : '';
+            const isTyping = ['INPUT', 'TEXTAREA', 'IFRAME'].includes(activeTag);
+
+            if (coveredRatio > 0.5 && !isTyping && !isReloadingExamFrame) {
+                reportSecurityViolationOnce(
+                    "blur-overlay",
+                    "Layar Tertutup > 50% (Asisten AI / Pop-up Terdeteksi)",
+                    3000
+                );
+            }
+        }, 600);
+    };
 
     // FOCUS: Terjadi saat Asisten Google ditutup dan kembali ke ujian
     handlers.focus = () => {
@@ -2577,19 +2558,19 @@ handlers.blur = () => {
     // sinyal tambahan ketika halaman ditinggalkan.
     handlers.pagehide = () => { return; };
     handlers.fullscreen = () => {
-    if (!isExamActive || isReloading) return;
-    if (!document.fullscreenElement) {
-        // Beri waktu toleransi 3 detik bagi browser untuk menstabilkan UI setelah reload
-        if (Date.now() - (window.examStartTime || 0) < 3000) return;
-        const now = Date.now();
-        if (now - lastFullscreenViolation < 2500) return;
-        lastFullscreenViolation = now;
-        reportViolation("Keluar dari Mode Layar Penuh");
-        setTimeout(() => {
-            if (isExamActive) enterExamFullscreen();
-        }, 500);
-    }
-};
+        if (window.AndroidApp && typeof window.AndroidApp.isNativeApp === "function") return;
+        if (!isExamActive || isReloading) return;
+        if (!document.fullscreenElement) {
+            if (Date.now() - (window.examStartTime || 0) < 3000) return;
+            const now = Date.now();
+            if (now - lastFullscreenViolation < 2500) return;
+            lastFullscreenViolation = now;
+            reportViolation("Keluar dari Mode Layar Penuh");
+            setTimeout(() => {
+                if (isExamActive) enterExamFullscreen();
+            }, 500);
+        }
+    };
 
     document.addEventListener('contextmenu', handlers.contextmenu, true);
     document.addEventListener('copy', handlers.copy, true);
@@ -2767,12 +2748,26 @@ async function triggerLock() {
 
 async function unlockApp() {
     if (document.getElementById('unlock-pwd').value === activePin) {
-        document.getElementById('lock-screen').classList.add('hidden-element'); document.getElementById('unlock-pwd').value = ""; localStorage.setItem('exam_violation_count', '0'); violationCount = 0; document.getElementById('violation-count').textContent = "0"; document.getElementById('violation-badge').classList.add('hidden-element');
-        if (user && user.id) { await db.from('live').update({ isLocked: false, v: 0, lastStatus: 'AKSES DIBUKA (PIN)', updated_at: new Date().toISOString() }).eq('id', user.id);
-            monitorChannel.send({ type: 'broadcast', event: 'snapshot-push', payload: { userId: user.id, v: 0, isLocked: false, status: 'AKTIF' } }); // Kirim broadcast agar dashboard admin langsung update tanpa tunggu snapshot
-	} 
-        setTimeout(() => document.documentElement.requestFullscreen().catch(() => {}), 500);
-    } else { showNotify("PIN Pengawas Salah!", "error"); }
+        document.getElementById('lock-screen').classList.add('hidden-element');
+        document.getElementById('unlock-pwd').value = "";
+        localStorage.setItem('exam_violation_count', '0');
+        violationCount = 0;
+        document.getElementById('violation-count').textContent = "0";
+        document.getElementById('violation-badge').classList.add('hidden-element');
+
+        const frameContainer = document.getElementById('exam-frame-container');
+        if (frameContainer) frameContainer.style.opacity = '1';
+        const examViewer = document.getElementById('exam-viewer');
+        if (examViewer) examViewer.classList.remove('hidden-element');
+
+        if (user && user.id) {
+            await db.from('live').update({ isLocked: false, v: 0, lastStatus: 'AKSES DIBUKA (PIN)', updated_at: new Date().toISOString() }).eq('id', user.id);
+            monitorChannel.send({ type: 'broadcast', event: 'snapshot-push', payload: { userId: user.id, v: 0, isLocked: false, status: 'AKTIF' } });
+        }
+        setTimeout(() => enterExamFullscreen(), 300);
+    } else {
+        showNotify("PIN Pengawas Salah!", "error");
+    }
 }
 
 // --- H. MONITORING (SUPABASE BROADCAST REPLACEMENT) ---
@@ -3081,9 +3076,18 @@ function remoteFinishStudent(studentId, studentName) {
 }
 
 function forceUnlockLocally() {
-    document.getElementById('lock-screen').classList.add('hidden-element'); document.getElementById('unlock-pwd').value = ""; violationCount = 0; localStorage.setItem('exam_violation_count', '0');
-    document.getElementById('violation-count').textContent = "0"; document.getElementById('violation-badge').classList.add('hidden-element');
-    showNotify("Akses dibuka oleh pengawas.","info"); document.documentElement.requestFullscreen().catch(() => {});
+    document.getElementById('lock-screen').classList.add('hidden-element');
+    document.getElementById('unlock-pwd').value = "";
+    violationCount = 0;
+    localStorage.setItem('exam_violation_count', '0');
+    document.getElementById('violation-count').textContent = "0";
+    document.getElementById('violation-badge').classList.add('hidden-element');
+    const frameContainer = document.getElementById('exam-frame-container');
+    if (frameContainer) frameContainer.style.opacity = '1';
+    const examViewer = document.getElementById('exam-viewer');
+    if (examViewer) examViewer.classList.remove('hidden-element');
+    showNotify("Akses dibuka oleh pengawas.", "info");
+    enterExamFullscreen();
 }
 
 function remoteUnlockStudent(studentId) {
