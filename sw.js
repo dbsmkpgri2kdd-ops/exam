@@ -1,4 +1,4 @@
-const CACHE_NAME = 'prida-exambro-2026-v1';
+const CACHE_NAME = 'prida-exambro-2026-v2';
 const APP_SHELL = ['./'];
 
 self.addEventListener('install', event => {
