@@ -1751,9 +1751,11 @@ function reloadExamFrame() {
     newFrame.src = targetUrl;
     newFrame.setAttribute('data-exam-url', targetUrl);
     newFrame.className = "absolute inset-0 w-full h-full border-none bg-white z-10";
-    newFrame.setAttribute("sandbox", "allow-forms allow-scripts allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox");
+    if (!(window.AndroidApp && typeof window.AndroidApp.isNativeApp === "function")) {
+        newFrame.setAttribute("sandbox", "allow-forms allow-scripts allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox");
+    }
     newFrame.setAttribute("allow", "camera; microphone; fullscreen");
-    newFrame.setAttribute("referrerpolicy", "no-referrer");
+    newFrame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
 
     const resetBtn = () => {
         isReloadingExamFrame = false;
@@ -1990,7 +1992,7 @@ async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
         sendAndroidSignal("examprida://lock?state=true");
         try { window.location.hash = "lock=true"; } catch (e) {}
     }
-
+    if (isCameraRequired) {startStudentBroadcast(); }
     isExamActive = true;
     window.currentExamUrl = url;
     window.examStartTime = Date.now();
@@ -2060,9 +2062,11 @@ frame.id = 'exam-iframe';
 frame.src = url;
 frame.setAttribute('data-exam-url', url);
 frame.className = "absolute inset-0 w-full h-full border-none bg-white z-10";
-frame.setAttribute("sandbox", "allow-forms allow-scripts allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox");
-frame.setAttribute("allow", "camera; microphone; fullscreen");
-frame.setAttribute("referrerpolicy", "no-referrer");
+if (!(window.AndroidApp && typeof window.AndroidApp.isNativeApp === "function")) {
+        frame.setAttribute("sandbox", "allow-forms allow-scripts allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox");
+    }
+    frame.setAttribute("allow", "camera; microphone; fullscreen");
+    frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
 
 frame.onload = () => examLoader.remove();
 setTimeout(() => examLoader.remove(), 4500);
@@ -2120,8 +2124,6 @@ async function finishExam() {
     } catch (e) {
         console.error("Gagal membuka kunci Android:", e);
     }
-
-    window.location.hash = "lock=false";
     stopExamSecurity();
 
     // Matikan kamera & WebRTC bersih agar indikator kamera Android langsung padam
