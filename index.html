@@ -1941,7 +1941,7 @@ async function startExamEngine(url, mapel, dur, isCameraRequired, examId) {
 }
 
 async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
-    // 1. Setup Kamera terlebih dahulu sebelum mengunci Android
+    // 1. Setup Kamera
     const selfVideo = document.getElementById('self-video');
     const cameraContainer = selfVideo.parentElement;
 
@@ -1964,7 +1964,7 @@ async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
         cameraContainer.classList.add('hidden-element');
     }
 
-    // 2. Langsung kunci sistem & aktifkan Kiosk Mode (Tanpa popup Pin Android ganda)
+    // 2. Langsung Kunci Sistem Native (Tanpa Popup Pin Android Ganda)
     sendAndroidSignal("examprida://lock?state=true");
     if (window.AndroidApp && typeof window.AndroidApp.setExamLock === "function") {
         window.AndroidApp.setExamLock(true);
@@ -1977,6 +1977,7 @@ async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
     isExamActive = true;
     window.currentExamUrl = url;
     window.examStartTime = Date.now();
+
     securityBaseline.width = window.innerWidth;
     securityBaseline.height = window.innerHeight;
     securityBaseline.orientation = screen.orientation ? screen.orientation.type : null;
