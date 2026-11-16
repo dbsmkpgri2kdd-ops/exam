@@ -1730,25 +1730,44 @@ function reloadExamFrame() {
     if (!isExamActive || isReloadingExamFrame) return;
     const container = document.getElementById('exam-frame-container');
     const btn = document.getElementById('btn-refresh-exam');
-    const iframe = container ? container.querySelector('iframe') : null;
-    const targetUrl = window.currentExamUrl || (iframe ? iframe.getAttribute('data-exam-url') : '');
-    if (!iframe || !targetUrl) return;
+    const currentIframe = container ? container.querySelector('iframe') : null;
+    const targetUrl = window.currentExamUrl || (currentIframe ? currentIframe.getAttribute('data-exam-url') : '');
+    if (!container || !targetUrl) return;
 
     isReloadingExamFrame = true;
+    isReloading = true;
+    container.style.opacity = '1';
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '⟳ <span>Memuat...</span>';
     }
 
-    iframe.src = targetUrl;
+    const loaderNote = document.createElement('div');
+    loaderNote.className = "absolute inset-0 flex flex-col items-center justify-center bg-slate-50 text-slate-600 z-20 pointer-events-none";
+    loaderNote.innerHTML = '<div class="w-9 h-9 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-3"></div><p class="text-xs font-bold">Memuat ulang soal ujian...</p>';
 
-    setTimeout(() => {
+    const newFrame = document.createElement('iframe');
+    newFrame.id = 'exam-iframe';
+    newFrame.src = targetUrl;
+    newFrame.setAttribute('data-exam-url', targetUrl);
+    newFrame.className = "absolute inset-0 w-full h-full border-none bg-white z-10";
+    newFrame.setAttribute("sandbox", "allow-forms allow-scripts allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox");
+    newFrame.setAttribute("allow", "camera; microphone; fullscreen");
+    newFrame.setAttribute("referrerpolicy", "no-referrer");
+
+    const resetBtn = () => {
         isReloadingExamFrame = false;
+        isReloading = false;
+        loaderNote.remove();
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = '↻ <span>Refresh</span>';
         }
-    }, 2000);
+    };
+
+    newFrame.onload = resetBtn;
+    setTimeout(resetBtn, 4500);
+    container.replaceChildren(newFrame, loaderNote);
 }
 
 let pendingChecklistExam = null;
@@ -1964,15 +1983,16 @@ async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
         cameraContainer.classList.add('hidden-element');
     }
 
-    // 2. Langsung Kunci Sistem Native (Tanpa Popup Pin Android Ganda)
-    sendAndroidSignal("examprida://lock?state=true");
-    if (window.AndroidApp && typeof window.AndroidApp.setExamLock === "function") {
-        window.AndroidApp.setExamLock(true);
-    }
+    // 2. Langsung Kunci Sistem Native (1x saja, tanpa popup Pin)
+	if (window.AndroidApp && typeof window.AndroidApp.setExamLock === "function") {
+	    window.AndroidApp.setExamLock(true);
+	} else {
+	    sendAndroidSignal("examprida://lock?state=true");
+	}
 
-    if (isCameraRequired) {
+	if (isCameraRequired) {
         startStudentBroadcast();
-    }
+	}
 
     isExamActive = true;
     window.currentExamUrl = url;
@@ -2036,22 +2056,29 @@ async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
         }));
     }
 
-    // 6. Render Iframe Ujian
-    document.getElementById('view-mapel').textContent = mapel;
-    const frameContainer = document.getElementById('exam-frame-container');
-    const frame = document.createElement('iframe');
-    frame.id = 'exam-iframe';
-    frame.src = url;
-    frame.setAttribute('data-exam-url', url);
-    frameContainer.style.opacity = '1';
-    frame.className = "absolute inset-0 w-full h-full border-none bg-white z-10";
-    frame.setAttribute("sandbox", "allow-forms allow-scripts allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox");
-    frame.setAttribute("allow", "camera; microphone; fullscreen");
-    frame.setAttribute("referrerpolicy", "no-referrer");
+// 6. Render Iframe Ujian dengan Loading Overlay anti layar putih
+document.getElementById('view-mapel').textContent = mapel;
+const frameContainer = document.getElementById('exam-frame-container');
+frameContainer.style.opacity = '1';
 
-    frameContainer.innerHTML = "";
-    frameContainer.appendChild(frame);
-    document.getElementById('exam-viewer').classList.remove('hidden-element');
+const examLoader = document.createElement('div');
+examLoader.className = "absolute inset-0 flex flex-col items-center justify-center bg-white text-slate-700 z-20 pointer-events-none";
+examLoader.innerHTML = '<div class="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-3"></div><p class="text-xs font-black uppercase tracking-widest">Memuat Soal Ujian...</p><p class="text-[10px] text-slate-400 mt-1">Menghubungkan ke Google Forms</p>';
+
+const frame = document.createElement('iframe');
+frame.id = 'exam-iframe';
+frame.src = url;
+frame.setAttribute('data-exam-url', url);
+frame.className = "absolute inset-0 w-full h-full border-none bg-white z-10";
+frame.setAttribute("sandbox", "allow-forms allow-scripts allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox");
+frame.setAttribute("allow", "camera; microphone; fullscreen");
+frame.setAttribute("referrerpolicy", "no-referrer");
+
+frame.onload = () => examLoader.remove();
+setTimeout(() => examLoader.remove(), 4500);
+
+frameContainer.replaceChildren(frame, examLoader);
+document.getElementById('exam-viewer').classList.remove('hidden-element');
 
     const btnFinish = document.getElementById('btn-finish-exam');
     if (finishButtonMinutes === 0) {
@@ -2200,7 +2227,7 @@ function showPostExamAd(onDone) {
         finishFlow();
     };
 
-    const fallback = setTimeout(safeDone, 2000);
+    const fallback = setTimeout(safeDone, 6000);
 
     if (window.AndroidApp && typeof window.AndroidApp.isOwnerAdSafeMode === "function" && window.AndroidApp.isOwnerAdSafeMode()) {
         clearTimeout(fallback);
