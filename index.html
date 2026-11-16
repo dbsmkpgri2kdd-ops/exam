@@ -1775,44 +1775,26 @@ function reloadExamFrame() {
     if (!isExamActive || isReloadingExamFrame) return;
     const container = document.getElementById('exam-frame-container');
     const btn = document.getElementById('btn-refresh-exam');
-    const currentIframe = container ? container.querySelector('iframe') : null;
-    const targetUrl = window.currentExamUrl || (currentIframe ? currentIframe.getAttribute('data-exam-url') : '');
-    if (!container || !targetUrl) return;
+    const iframe = container ? container.querySelector('iframe') : null;
+    const targetUrl = window.currentExamUrl || (iframe ? iframe.getAttribute('data-exam-url') : '');
+    if (!iframe || !targetUrl) return;
 
     isReloadingExamFrame = true;
-    isReloading = true;
-    container.style.opacity = '1';
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '⟳ <span>Memuat...</span>';
     }
 
-    const loaderNote = document.createElement('div');
-    loaderNote.className = "absolute inset-0 flex flex-col items-center justify-center bg-slate-50 text-slate-500 text-xs font-bold z-0";
-    loaderNote.innerHTML = '<div class="w-8 h-8 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mb-3"></div><span>Memuat ulang soal ujian...</span>';
+    // Refresh langsung pada iframe yang sama agar tidak terjadi layar putih
+    iframe.src = targetUrl;
 
-    const newFrame = document.createElement('iframe');
-    newFrame.id = 'exam-iframe';
-    newFrame.src = targetUrl;
-    newFrame.setAttribute('data-exam-url', targetUrl);
-    newFrame.className = "absolute inset-0 w-full h-full border-none bg-white z-10";
-    newFrame.setAttribute("sandbox", "allow-forms allow-scripts allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox");
-    newFrame.setAttribute("allow", "camera; microphone; fullscreen");
-    newFrame.setAttribute("referrerpolicy", "no-referrer");
-
-    const resetBtn = () => {
+    setTimeout(() => {
         isReloadingExamFrame = false;
-        isReloading = false;
-        container.style.opacity = '1';
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = '↻ <span>Refresh</span>';
         }
-    };
-
-    newFrame.onload = resetBtn;
-    setTimeout(resetBtn, 5000);
-    container.replaceChildren(loaderNote, newFrame);
+    }, 2000);
 }
 
 let pendingChecklistExam = null;
@@ -2028,19 +2010,12 @@ async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
         cameraContainer.classList.add('hidden-element');
     }
 
-    // 2. Wajib konfirmasi notifikasi Sematkan Layar (Pin) Android sebelum masuk mode ujian
-    const isPinAccepted = await requestAndroidPinConfirmation();
-    if (!isPinAccepted) {
-        isExamActive = false;
-        isResuming = false;
-        abortPreExamCamera();
-        sendAndroidSignal("examprida://lock?state=false");
-        window.location.hash = "lock=false";
-        showNotify("Ujian dibatalkan! Anda wajib menekan OKE pada notifikasi Sematkan Layar (Pin) untuk memulai ujian.", "error");
-        return;
+    // 2. Langsung kunci sistem dan masuk ujian (Tanpa popup Pin Android ganda)
+    sendAndroidSignal("examprida://lock?state=true");
+    if (window.AndroidApp && typeof window.AndroidApp.setExamLock === "function") {
+        window.AndroidApp.setExamLock(true);
     }
 
-    // 3. Baru aktifkan broadcast kamera & state ujian setelah Pin disetujui
     if (isCameraRequired) {
         startStudentBroadcast();
     }
@@ -2062,7 +2037,7 @@ async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
 
     await clearClipboard();
 
-    // 4. Setup Logika Pelanggaran
+    // 3. Setup Logika Pelanggaran
     const savedViolations = parseInt(localStorage.getItem('exam_violation_count') || '0', 10);
     violationCount = isResuming ? savedViolations : 0;
 
@@ -2074,12 +2049,12 @@ async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
 
     if (violationCount >= 5) setTimeout(triggerLock, 300);
 
-    // 5. Setup Lockdown
+    // 4. Setup Lockdown
     enableHardLockdown();
     requestExamWakeLock();
     enterExamFullscreen();
 
-    // 6. Setup Waktu Ujian
+    // 5. Setup Waktu Ujian
     let endTime, startTime, finishButtonMinutes;
 
     if (isResuming) {
@@ -2106,7 +2081,7 @@ async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
         }));
     }
 
-    // 7. Render Iframe
+    // 6. Render Iframe Ujian
     document.getElementById('view-mapel').textContent = mapel;
     const frameContainer = document.getElementById('exam-frame-container');
     const frame = document.createElement('iframe');
@@ -2130,7 +2105,7 @@ async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
         btnFinish.classList.add('hidden-element');
     }
 
-    // 8. Timer Loop
+    // 7. Timer Loop
     if (window.examTimerInterval) clearInterval(window.examTimerInterval);
     window.examTimerInterval = setInterval(() => {
         if (!isExamActive) return clearInterval(window.examTimerInterval);
@@ -2263,28 +2238,36 @@ async function clearClipboard() {
 // Fungsi Menampilkan Iklan Setelah Ujian
 function showPostExamAd(onDone) {
     const finishFlow = typeof onDone === "function" ? onDone : () => {};
-    if (window.AndroidApp && typeof window.AndroidApp.isOwnerAdSafeMode === "function" && window.AndroidApp.isOwnerAdSafeMode()) {
+    let executed = false;
+    const safeDone = () => {
+        if (executed) return;
+        executed = true;
         finishFlow();
+    };
+
+    const fallback = setTimeout(safeDone, 2000);
+
+    if (window.AndroidApp && typeof window.AndroidApp.isOwnerAdSafeMode === "function" && window.AndroidApp.isOwnerAdSafeMode()) {
+        clearTimeout(fallback);
+        safeDone();
         return;
     }
     if (window.AndroidApp && typeof window.AndroidApp.showInterstitialAd === "function") {
-        let closed = false;
-        const fallback = setTimeout(() => {
-            if (closed) return;
-            closed = true;
-            finishFlow();
-        }, 8000);
         window.onAndroidAdClosed = () => {
-            if (closed) return;
-            closed = true;
             clearTimeout(fallback);
             delete window.onAndroidAdClosed;
-            finishFlow();
+            safeDone();
         };
-        window.AndroidApp.showInterstitialAd();
+        try {
+            window.AndroidApp.showInterstitialAd();
+        } catch (e) {
+            clearTimeout(fallback);
+            safeDone();
+        }
         return;
     }
-    finishFlow();
+    clearTimeout(fallback);
+    safeDone();
 }
 
 let isSecuritySetup = false, blurTimer = null;
