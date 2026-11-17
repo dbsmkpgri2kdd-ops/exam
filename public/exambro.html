@@ -13,7 +13,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- SUPABASE -->
@@ -485,7 +484,7 @@
             <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-2xl flex-shrink-0 flex items-center justify-center font-black text-sm">2</div>
             <div>
                 <h4 class="font-bold text-[11px] text-slate-800 uppercase tracking-tight">Live Streaming</h4>
-                <p class="text-[10px] text-slate-400 leading-relaxed mt-1">Klik tombol <b>LIVE</b> pada kartu siswa untuk melihat layar mereka secara real-time via PeerJS.</p>
+                <p class="text-[10px] text-slate-400 leading-relaxed mt-1">Klik tombol <b>LIVE</b> pada kartu siswa untuk melihat kamera mereka secara real-time via WebRTC.</p>
             </div>
         </div>
         <div class="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex items-start space-x-4">
@@ -1093,7 +1092,11 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { 
 const db = supabaseClient;
 const publicData = createCollectionWrapper(db);
 const appId = 'exambro-system-2026';
-const monitorChannel = db.channel('exam-monitoring', {config: { broadcast: { self: false, ack: false } } }); monitorChannel.subscribe();
+let isMonitorChannelSubscribed = false;
+const monitorChannel = db.channel('exam-monitoring', { config: { broadcast: { self: false, ack: false } } });
+monitorChannel.subscribe((status) => {
+    isMonitorChannelSubscribed = (status === 'SUBSCRIBED');
+});
 const isLocalFileOrigin = (window.location.protocol === 'file:' || window.location.origin === 'null') && !(window.AndroidApp && typeof window.AndroidApp.isNativeApp === 'function');
 
 function showStartupError(message) {
@@ -1271,9 +1274,17 @@ let monitorInterval = null;
 let currentRole = 'student';
 let specialSettings = { pin: "1234", duration: 60, finishButtonMinutes: 30 };
 let studentSnapshotInterval = null;
-let myPeer = null;
+const RTC_CONFIG = {
+    iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+};
 let currentClassChannel = null;
-let adminPeer = null;
+let studentRtcPeers = new Map();
+let studentRtcListenersBound = false;
+let adminRtcListenersBound = false;
+const adminSessionPeerId = 'admin-prida-' + Math.random().toString(36).slice(2, 8);
 const sharedCanvas = document.createElement('canvas');
 const sharedCtx = sharedCanvas.getContext('2d');
 
@@ -1403,7 +1414,7 @@ async function logout() {
     if (!ok) return;
     try {
         if (user && user.id) await db.from('live').delete().eq('id', user.id);
-        if (myPeer) myPeer.destroy();
+        cleanupStudentPeer();
     } catch (e) { console.log("Clean up skip"); }
     localStorage.removeItem('exambro_session');
     location.reload();
@@ -1960,10 +1971,7 @@ function abortPreExamCamera() {
         });
         window.localStream = null;
     }
-    if (typeof myPeer !== "undefined" && myPeer) {
-        try { myPeer.destroy(); } catch (e) {}
-        myPeer = null;
-    }
+    cleanupStudentPeer();
 }
 
 
@@ -2423,10 +2431,7 @@ async function finishExam() {
         window.localStream = null;
     }
 
-    if (myPeer) {
-        myPeer.destroy();
-        myPeer = null;
-    }
+    cleanupStudentPeer();
 
     // Bersihkan data sesi
     localStorage.removeItem('active_exam_state');
@@ -2894,90 +2899,177 @@ function enableHardLockdown() {
     requestExamWakeLock();
 }
 
+function getSafePeerId(rawId) {
+    return String(rawId || '').replace(/[^a-zA-Z0-9]/g, '');
+}
+
+function cleanupStudentPeer(targetSessionId = null) {
+    if (targetSessionId) {
+        const entry = studentRtcPeers.get(targetSessionId);
+        if (entry) {
+            try { entry.pc.close(); } catch (e) {}
+            studentRtcPeers.delete(targetSessionId);
+        }
+        return;
+    }
+    studentRtcPeers.forEach((entry) => {
+        try { entry.pc.close(); } catch (e) {}
+    });
+    studentRtcPeers.clear();
+}
+
 function initPeerConnection() {
-    // Pastikan ID disanitasi sama persis dengan yang dicari Admin
-    const safePeerId = user.id.replace(/[^a-zA-Z0-9]/g, '');
-    
-    if (myPeer && !myPeer.destroyed) return;
+    if (!user || !user.id) return;
+    const safePeerId = getSafePeerId(user.id);
+    if (!safePeerId) return;
 
-    // Gunakan hanya 2 STUN Server agar discovery CEPAT (Sesuai peringatan log sebelumnya)
-    myPeer = new Peer(safePeerId, {
-        debug: 1,
-        config: {
-            'iceServers': [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ],
-            'sdpSemantics': 'unified-plan'
-        }
-    });
+    // Simpan peer_id bersih ke database (best-effort)
+    Promise.resolve(db.from('live').update({ peer_id: safePeerId }).eq('id', user.id)).catch(() => {});
 
-    myPeer.on('open', (id) => {
-        console.log('✅ Peer Siswa Aktif:', id);
-        // Simpan ID yang sudah bersih ke database
-        db.from('live').update({ peer_id: id }).eq('id', user.id);
-    });
+    if (studentRtcListenersBound) return;
+    studentRtcListenersBound = true;
 
-    myPeer.on('call', (call) => {
-        console.log('📞 Panggilan masuk...');
-        
-        // Ambil stream terbaru
-        const currentStream = window.localStream || document.getElementById('self-video').srcObject;
+    monitorChannel.on('broadcast', { event: 'rtc-offer' }, async ({ payload }) => {
+        if (!payload || !user || !user.id) return;
+        const mySafeId = getSafePeerId(user.id);
+        if (payload.targetPeerId !== mySafeId || !payload.sdp || !payload.sessionId) return;
 
-        if (currentStream) {
-            call.answer(currentStream);
-            console.log('📤 Membalas dengan Video.');
-        } else {
-            console.log('⚠️ Stream kosong, mencoba akses kamera darurat...');
-            navigator.mediaDevices.getUserMedia({ video: { width: 160, height: 120 } })
-                .then(stream => {
-                    window.localStream = stream;
-                    call.answer(stream);
+        let currentStream = window.localStream || document.getElementById('self-video')?.srcObject;
+        if (!currentStream) {
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia({ video: { width: 160, height: 120 } });
+                window.localStream = currentStream;
+            } catch (e) {
+                monitorChannel.send({
+                    type: 'broadcast',
+                    event: 'rtc-unavailable',
+                    payload: { targetAdminId: payload.fromAdminId, sessionId: payload.sessionId, targetPeerId: mySafeId }
                 });
+                return;
+            }
+        }
+
+        cleanupStudentPeer(payload.sessionId);
+
+        const pc = new RTCPeerConnection(RTC_CONFIG);
+        const entry = { pc, pendingIce: [], remoteReady: false };
+        studentRtcPeers.set(payload.sessionId, entry);
+
+        currentStream.getTracks().forEach((track) => {
+            pc.addTrack(track, currentStream);
+        });
+
+        pc.onicecandidate = (event) => {
+            if (event.candidate) {
+                monitorChannel.send({
+                    type: 'broadcast',
+                    event: 'rtc-ice',
+                    payload: {
+                        targetId: payload.fromAdminId,
+                        fromPeerId: mySafeId,
+                        sessionId: payload.sessionId,
+                        candidate: event.candidate
+                    }
+                });
+            }
+        };
+
+        pc.onconnectionstatechange = () => {
+            if (['failed', 'closed'].includes(pc.connectionState)) {
+                cleanupStudentPeer(payload.sessionId);
+            }
+        };
+
+        try {
+            await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+            entry.remoteReady = true;
+            while (entry.pendingIce.length > 0) {
+                const ice = entry.pendingIce.shift();
+                await pc.addIceCandidate(new RTCIceCandidate(ice)).catch(() => {});
+            }
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+
+            monitorChannel.send({
+                type: 'broadcast',
+                event: 'rtc-answer',
+                payload: {
+                    targetAdminId: payload.fromAdminId,
+                    fromPeerId: mySafeId,
+                    sessionId: payload.sessionId,
+                    sdp: pc.localDescription
+                }
+            });
+        } catch (err) {
+            console.warn('WebRTC answer gagal dibuat:', err?.message || err);
+            cleanupStudentPeer(payload.sessionId);
         }
     });
 
-    myPeer.on('error', (err) => {
-        console.error('PeerJS Student Error:', err.type);
-        if (err.type === 'id-taken' || err.type === 'network') {
-            setTimeout(initPeerConnection, 4000);
+    monitorChannel.on('broadcast', { event: 'rtc-ice' }, async ({ payload }) => {
+        if (!payload || !user || !user.id) return;
+        const mySafeId = getSafePeerId(user.id);
+        if (payload.targetId !== mySafeId || !payload.sessionId || !payload.candidate) return;
+        const entry = studentRtcPeers.get(payload.sessionId);
+        if (!entry) return;
+        if (entry.remoteReady) {
+            await entry.pc.addIceCandidate(new RTCIceCandidate(payload.candidate)).catch(() => {});
+        } else {
+            entry.pendingIce.push(payload.candidate);
+        }
+    });
+
+    monitorChannel.on('broadcast', { event: 'rtc-stop' }, ({ payload }) => {
+        if (!payload || !user || !user.id) return;
+        const mySafeId = getSafePeerId(user.id);
+        if (payload.targetPeerId === mySafeId) {
+            cleanupStudentPeer(payload.sessionId || null);
         }
     });
 }
 
 function initAdminPeer() {
-    if (adminPeer && !adminPeer.destroyed) return;
+    if (adminRtcListenersBound) return;
+    adminRtcListenersBound = true;
 
-    // ID tetap acak tapi log diperjelas
-    const adminId = 'admin-prida-' + Math.random().toString(36).substr(2, 5);
-    
-    adminPeer = new Peer(adminId, {
-        debug: 1, // Ubah ke 1 agar tidak terlalu banyak log tapi tetap tahu errornya
-        config: {
-            'iceServers': [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ],
-            'sdpSemantics': 'unified-plan'
+    monitorChannel.on('broadcast', { event: 'rtc-answer' }, async ({ payload }) => {
+        if (!payload || payload.targetAdminId !== adminSessionPeerId) return;
+        const active = window.activeCalls && window.activeCalls[payload.fromPeerId];
+        if (!active || active.sessionId !== payload.sessionId || !active.pc) return;
+        try {
+            await active.pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+            active.remoteReady = true;
+            while (active.pendingIce.length > 0) {
+                const ice = active.pendingIce.shift();
+                await active.pc.addIceCandidate(new RTCIceCandidate(ice)).catch(() => {});
+            }
+        } catch (err) {
+            console.warn('Gagal menerapkan SDP answer:', err?.message || err);
+            stopActiveStream(payload.fromPeerId);
         }
     });
 
-    adminPeer.on('open', (id) => {
-        console.log('✅ Admin Peer Terhubung: ' + id);
-    });
-
-    adminPeer.on('disconnected', () => {
-        console.warn('⚠️ Koneksi signaling terputus, menyambung ulang...');
-        adminPeer.reconnect();
-    });
-
-    adminPeer.on('error', (err) => {
-        console.error('❌ Peer Error:', err.type);
-        // Jika ID sudah dipakai, buat baru
-        if (err.type === 'unavailable-id') {
-            setTimeout(initAdminPeer, 1000);
+    monitorChannel.on('broadcast', { event: 'rtc-ice' }, async ({ payload }) => {
+        if (!payload || payload.targetId !== adminSessionPeerId) return;
+        const active = window.activeCalls && window.activeCalls[payload.fromPeerId];
+        if (!active || active.sessionId !== payload.sessionId || !active.pc || !payload.candidate) return;
+        if (active.remoteReady) {
+            await active.pc.addIceCandidate(new RTCIceCandidate(payload.candidate)).catch(() => {});
+        } else {
+            active.pendingIce.push(payload.candidate);
         }
     });
+
+    monitorChannel.on('broadcast', { event: 'rtc-unavailable' }, ({ payload }) => {
+        if (!payload || payload.targetAdminId !== adminSessionPeerId) return;
+        const active = window.activeCalls && window.activeCalls[payload.targetPeerId];
+        if (active && active.sessionId === payload.sessionId) {
+            stopActiveStream(payload.targetPeerId);
+            showNotify('Kamera siswa tidak tersedia atau belum diizinkan.', 'error');
+        }
+    });
+
+    console.log('✅ Admin WebRTC Signaling aktif via Supabase Realtime:', adminSessionPeerId);
 }
 
 // SISI SISWA: Lapor instan jika terjadi pelanggaran
@@ -3211,76 +3303,123 @@ function updateMonitorCard(p) {
     document.getElementById('online-count').textContent = `${innerGrid.children.length} Siswa Terpantau`;
 }
 
-// --- PERBAIKAN LIVE STREAMING ---
-let currentlyWatching = null; // Variabel untuk menyimpan ID siswa yang sedang ditonton
-function startLiveStream(safeId) {
+// --- PERBAIKAN LIVE STREAMING (NATIVE WEBRTC OVER SUPABASE REALTIME) ---
+let currentlyWatching = null;
+async function startLiveStream(safeId) {
     const videoEl = document.getElementById(`video-${safeId}`);
     const imgEl = document.getElementById(`snapshot-${safeId}`);
     const btn = document.getElementById(`btn-live-${safeId}`);
+    if (!btn || !videoEl || !imgEl) return;
 
     if (btn.textContent === "STOP") { stopActiveStream(safeId); return; }
-    
-    if (!adminPeer || !adminPeer.open) {
-        showNotify("Koneksi Admin belum siap. Menghubungkan ulang...", "info");
-        initAdminPeer(); return;
+
+    initAdminPeer();
+    if (!isMonitorChannelSubscribed) {
+        try { monitorChannel.subscribe(); } catch (e) {}
     }
 
     if (currentlyWatching) stopActiveStream(currentlyWatching);
-    
+
     btn.textContent = "CONNECTING...";
     btn.disabled = true;
 
-    // Melakukan panggilan tanpa mengirim video (Admin cuma nonton)
-    const call = adminPeer.call(safeId, new MediaStream());
-    
-    window.activeCalls = window.activeCalls || {};
-    window.activeCalls[safeId] = call;
-    currentlyWatching = safeId;
+    const sessionId = 'rtc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    pc.addTransceiver('video', { direction: 'recvonly' });
 
-    call.on('stream', (remoteStream) => {
-        console.log('🎬 Video Diterima!');
-        btn.disabled = false;
-        btn.textContent = "STOP";
-        btn.classList.replace('bg-blue-600', 'bg-red-600');
-
-        videoEl.srcObject = remoteStream;
-        videoEl.classList.remove('hidden');
-        imgEl.classList.add('hidden');
-        
-        videoEl.muted = true;
-        videoEl.play().catch(e => {
-            console.log("Autoplay dicegah, mencoba play manual...");
-            videoEl.play();
-        });
-    });
-
-    // Durasi tunggu jabat tangan ditingkatkan ke 15 detik
     const callTimeout = setTimeout(() => {
         if (btn.textContent === "CONNECTING...") {
-            console.warn("Panggilan Gagal.");
+            console.warn("Panggilan Live WebRTC timeout.");
             stopActiveStream(safeId);
             showNotify("Siswa tidak merespon. Pastikan HP Siswa tidak terkunci dan layar sedang menyala.", "error");
         }
     }, 15000);
 
-    call.on('error', (err) => {
-        console.error("Call Error:", err);
+    window.activeCalls = window.activeCalls || {};
+    window.activeCalls[safeId] = {
+        pc,
+        sessionId,
+        timeoutId: callTimeout,
+        pendingIce: [],
+        remoteReady: false
+    };
+    currentlyWatching = safeId;
+
+    pc.ontrack = (event) => {
         clearTimeout(callTimeout);
+        const remoteStream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track]);
+        btn.disabled = false;
+        btn.textContent = "STOP";
+        btn.classList.remove('bg-blue-600');
+        btn.classList.add('bg-red-600');
+
+        videoEl.srcObject = remoteStream;
+        videoEl.classList.remove('hidden');
+        imgEl.classList.add('hidden');
+
+        videoEl.muted = true;
+        videoEl.play().catch(() => {});
+    };
+
+    pc.onicecandidate = (event) => {
+        if (event.candidate) {
+            monitorChannel.send({
+                type: 'broadcast',
+                event: 'rtc-ice',
+                payload: {
+                    targetId: safeId,
+                    fromPeerId: adminSessionPeerId,
+                    sessionId,
+                    candidate: event.candidate
+                }
+            });
+        }
+    };
+
+    pc.onconnectionstatechange = () => {
+        if (['failed', 'closed'].includes(pc.connectionState) && currentlyWatching === safeId) {
+            stopActiveStream(safeId);
+        }
+    };
+
+    try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        monitorChannel.send({
+            type: 'broadcast',
+            event: 'rtc-offer',
+            payload: {
+                targetPeerId: safeId,
+                fromAdminId: adminSessionPeerId,
+                sessionId,
+                sdp: pc.localDescription
+            }
+        });
+    } catch (err) {
+        console.warn("Gagal memulai live stream:", err?.message || err);
         stopActiveStream(safeId);
-    });
+    }
 }
 
-// Fungsi bantu untuk mematikan stream
 function stopActiveStream(id) {
     const vEl = document.getElementById(`video-${id}`);
     const iEl = document.getElementById(`snapshot-${id}`);
     const bEl = document.getElementById(`btn-live-${id}`);
-    
+
     if (window.activeCalls && window.activeCalls[id]) {
-        window.activeCalls[id].close();
+        const active = window.activeCalls[id];
+        if (active.timeoutId) clearTimeout(active.timeoutId);
+        try {
+            monitorChannel.send({
+                type: 'broadcast',
+                event: 'rtc-stop',
+                payload: { targetPeerId: id, sessionId: active.sessionId }
+            });
+        } catch (e) {}
+        try { if (active.pc) active.pc.close(); } catch (e) {}
         delete window.activeCalls[id];
     }
-    
+
     if (vEl) {
         vEl.srcObject = null;
         vEl.classList.add('hidden');
@@ -3289,7 +3428,8 @@ function stopActiveStream(id) {
     if (bEl) {
         bEl.textContent = "LIVE";
         bEl.disabled = false;
-        bEl.classList.replace('bg-red-600', 'bg-blue-600');
+        bEl.classList.remove('bg-red-600');
+        bEl.classList.add('bg-blue-600');
     }
     if (currentlyWatching === id) currentlyWatching = null;
 }
