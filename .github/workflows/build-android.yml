@@ -1,0 +1,84 @@
+name: Build Native Android APK & AAB
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Detect Android Project Directory
+        id: paths
+        run: |
+          if [ -f "settings.gradle.kts" ]; then
+            echo "dir=." >> "$GITHUB_OUTPUT"
+          elif [ -f "android-native/settings.gradle.kts" ]; then
+            echo "dir=android-native" >> "$GITHUB_OUTPUT"
+          else
+            echo "settings.gradle.kts not found" >&2
+            exit 1
+          fi
+
+      - name: Sync Web Assets if Present
+        run: |
+          DIR="${{ steps.paths.outputs.dir }}"
+          if [ -f "public/exambro.html" ]; then
+            mkdir -p "$DIR/app/src/main/assets/web/icons"
+            cp public/exambro.html "$DIR/app/src/main/assets/web/index.html"
+            [ -f "public/manifest.json" ] && cp public/manifest.json "$DIR/app/src/main/assets/web/"
+            [ -f "public/sw.js" ] && cp public/sw.js "$DIR/app/src/main/assets/web/"
+            [ -d "public/icons" ] && cp -r public/icons/* "$DIR/app/src/main/assets/web/icons/"
+          fi
+
+      - name: Decode Release Keystore (Optional GitHub Secrets)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          DIR="${{ steps.paths.outputs.dir }}"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$DIR/app/release-keystore.jks"
+            cat <<EOF > "$DIR/keystore.properties"
+          storeFile=release-keystore.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+          fi
+
+      - name: Build Debug & Release APK + AAB
+        working-directory: ${{ steps.paths.outputs.dir }}
+        run: gradle assembleDebug assembleRelease bundleRelease --no-daemon
+
+      - name: Collect Release Artifacts
+        run: |
+          DIR="${{ steps.paths.outputs.dir }}"
+          mkdir -p build-artifacts
+          cp "$DIR"/app/build/outputs/apk/debug/*.apk build-artifacts/ 2>/dev/null || true
+          cp "$DIR"/app/build/outputs/apk/release/*.apk build-artifacts/ 2>/dev/null || true
+          cp "$DIR"/app/build/outputs/bundle/release/*.aab build-artifacts/ 2>/dev/null || true
+          ls -lh build-artifacts/
+
+      - name: Upload APK & AAB Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: prida-exambro-android-builds
+          path: build-artifacts/*
