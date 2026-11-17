@@ -375,8 +375,9 @@ class AdMobManager(private val activity: Activity) {
             iconView.visibility = View.GONE
         }
 
-        if (nativeAd.mediaContent != null) {
-            mediaView.mediaContent = nativeAd.mediaContent
+        val mediaContent = nativeAd.mediaContent
+        if (mediaContent != null) {
+            mediaView.mediaContent = mediaContent
             mediaView.visibility = View.VISIBLE
         } else {
             mediaView.visibility = View.GONE
