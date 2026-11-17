@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+*.keystore
+*.jks
+keystore.properties
+local.properties
+
