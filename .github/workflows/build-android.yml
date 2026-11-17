@@ -18,13 +18,20 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Accept Android SDK Licenses & Install API 35
+      - name: Configure Preinstalled Android SDK & Accept Licenses
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$SDK_DIR" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> "$GITHUB_ENV"
+          SDKMANAGER=$(find "$SDK_DIR/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -n 1)
+          if [ -n "$SDKMANAGER" ]; then
+            (yes | sudo "$SDKMANAGER" --sdk_root="$SDK_DIR" --licenses > /dev/null 2>&1) || (yes | "$SDKMANAGER" --sdk_root="$SDK_DIR" --licenses > /dev/null 2>&1) || true
+            if [ ! -d "$SDK_DIR/platforms/android-35" ] || [ ! -d "$SDK_DIR/build-tools/35.0.0" ]; then
+              sudo "$SDKMANAGER" --sdk_root="$SDK_DIR" "platform-tools" "platforms;android-35" "build-tools;35.0.0" || \
+                "$SDKMANAGER" --sdk_root="$SDK_DIR" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+            fi
+          fi
+          ls -la "$SDK_DIR/platforms" "$SDK_DIR/build-tools" || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -43,9 +50,11 @@ jobs:
             exit 1
           fi
 
-      - name: Sync Web Assets if Present
+      - name: Write local.properties & Sync Web Assets
         run: |
           DIR="${{ steps.paths.outputs.dir }}"
+          SDK_DIR="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "sdk.dir=$SDK_DIR" > "$DIR/local.properties"
           if [ -f "public/exambro.html" ]; then
             mkdir -p "$DIR/app/src/main/assets/web/icons"
             cp public/exambro.html "$DIR/app/src/main/assets/web/index.html"
@@ -70,9 +79,6 @@ jobs:
 
       - name: Build Debug & Release APK + AAB
         working-directory: ${{ steps.paths.outputs.dir }}
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
         run: gradle assembleDebug assembleRelease bundleRelease --no-daemon --stacktrace
 
       - name: Collect Release Artifacts
