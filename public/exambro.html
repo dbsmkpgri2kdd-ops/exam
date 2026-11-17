@@ -1320,8 +1320,7 @@ window.onload = async () => {
                 document.getElementById('display-std-name').textContent = user.nama;
                 showPage('student-page');
                 syncOwnerAdProtection(false);
-                if (window.AndroidApp && typeof window.AndroidApp.showBannerAd === 'function') window.AndroidApp.showBannerAd(true);
-                if (window.AndroidApp && typeof window.AndroidApp.showNativeAd === 'function') window.AndroidApp.showNativeAd(true);
+                syncNativeAdsVisibility();
                 syncStudentData();
                 listenForAdminCommands();
             }
@@ -1401,7 +1400,7 @@ async function handleLogin() {
                 if (userData.pwd.toString() === pwd.toString()) { 
                     user = { id: doc.id, nama: selectedText, kelas: userData.kelas, nis: userData.nis }; currentRole = 'student'; setRole('student'); 
                     localStorage.setItem('exambro_session', JSON.stringify({ role: 'student', user: user, time: Date.now() })); 
-                    document.getElementById('display-std-name').textContent = user.nama; showPage('student-page'); syncOwnerAdProtection(false); if (window.AndroidApp && typeof window.AndroidApp.showBannerAd === 'function') window.AndroidApp.showBannerAd(true); if (window.AndroidApp && typeof window.AndroidApp.showNativeAd === 'function') window.AndroidApp.showNativeAd(true); syncStudentData(); listenForAdminCommands();
+                    document.getElementById('display-std-name').textContent = user.nama; showPage('student-page'); syncOwnerAdProtection(false); syncNativeAdsVisibility(); syncStudentData(); listenForAdminCommands();
                 } else { showNotify("Password Siswa Salah!", "error"); }
             } else { showNotify("Data tidak ditemukan!", "error"); }
         }
@@ -2269,6 +2268,7 @@ async function launchExamWithPin(url, mapel, dur, isCameraRequired, examId) {
             isExamActive = false;
             isResuming = false;
             sendAndroidSignal("examprida://lock?state=false");
+            syncNativeAdsVisibility();
             showNotify("⚠️ Ujian wajib kamera! Silakan izinkan akses kamera terlebih dahulu.", "error");
             return;
         }
