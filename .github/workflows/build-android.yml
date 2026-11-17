@@ -20,14 +20,18 @@ jobs:
 
       - name: Configure Preinstalled Android SDK & Accept Licenses
         run: |
+          ANDROID_USER_DIR="${{ runner.temp }}/.android"
+          mkdir -p "$ANDROID_USER_DIR" "$HOME/.android" "$HOME/.config/.android"
           SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           echo "ANDROID_HOME=$SDK_DIR" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK_DIR" >> "$GITHUB_ENV"
+          echo "ANDROID_USER_HOME=$ANDROID_USER_DIR" >> "$GITHUB_ENV"
+          echo "ANDROID_PREFS_ROOT=$ANDROID_USER_DIR" >> "$GITHUB_ENV"
           SDKMANAGER=$(find "$SDK_DIR/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -n 1)
           if [ -n "$SDKMANAGER" ]; then
-            (yes | sudo "$SDKMANAGER" --sdk_root="$SDK_DIR" --licenses > /dev/null 2>&1) || (yes | "$SDKMANAGER" --sdk_root="$SDK_DIR" --licenses > /dev/null 2>&1) || true
+            (yes | sudo -H "$SDKMANAGER" --sdk_root="$SDK_DIR" --licenses > /dev/null 2>&1) || (yes | "$SDKMANAGER" --sdk_root="$SDK_DIR" --licenses > /dev/null 2>&1) || true
             if [ ! -d "$SDK_DIR/platforms/android-35" ] || [ ! -d "$SDK_DIR/build-tools/35.0.0" ]; then
-              sudo "$SDKMANAGER" --sdk_root="$SDK_DIR" "platform-tools" "platforms;android-35" "build-tools;35.0.0" || \
+              sudo -H "$SDKMANAGER" --sdk_root="$SDK_DIR" "platform-tools" "platforms;android-35" "build-tools;35.0.0" || \
                 "$SDKMANAGER" --sdk_root="$SDK_DIR" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
             fi
           fi
