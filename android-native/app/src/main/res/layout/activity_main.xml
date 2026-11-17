@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/slate_950"
+    android:orientation="vertical">
+
+    <WebView
+        android:id="@+id/examWebView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- Native Advanced Ad (Tidak menimpa WebView, hanya tampil di dashboard, GONE saat ujian) -->
+    <FrameLayout
+        android:id="@+id/nativeAdContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/slate_100"
+        android:paddingStart="10dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="6dp"
+        android:visibility="gone" />
+
+    <!-- Anchored Adaptive Banner Ad Container (Otomatis hilang saat ujian berlangsung) -->
+    <FrameLayout
+        android:id="@+id/bannerAdContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/slate_900"
+        android:gravity="center"
+        android:visibility="gone" />
+
+</LinearLayout>

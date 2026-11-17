@@ -1,0 +1,6 @@
+{
+  "name": "PRIDA EXAMBRO 2026",
+  "description": "Secured Examination System 2026 — Polished Exambro Web App & Release-Ready Native Android (Kotlin) Project with Full AdMob Integration.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

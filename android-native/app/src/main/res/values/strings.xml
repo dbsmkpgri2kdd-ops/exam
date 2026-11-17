@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PRIDA EXAMBRO</string>
+    <string name="ad_badge_label">Iklan</string>
+    <string name="google_sync_title">Sinkronisasi Akun Google</string>
+</resources>

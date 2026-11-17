@@ -1,0 +1,43 @@
+{
+  "id": "/?source=pwa",
+  "name": "PRIDA EXAMBRO",
+  "short_name": "EXAMBRO",
+  "description": "Secured Examination System 2026",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "dir": "ltr",
+  "lang": "id",
+  "categories": [
+    "education",
+    "productivity"
+  ],
+  "display_override": [
+    "standalone",
+    "fullscreen"
+  ],
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "screenshots":[
+    {
+      "src": "/screenshots/screenshot1.png",
+      "sizes": "540x720",
+      "type": "image/png"
+    }
+  ]
+}
