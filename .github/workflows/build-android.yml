@@ -2,12 +2,13 @@ name: Build Native Android APK & AAB
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -15,103 +16,114 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: "17"
+          distribution: temurin
 
-      - name: Configure Preinstalled Android SDK & Writable Config Dirs
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+
+      - name: Install Android SDK packages
         run: |
-          ANDROID_USER_DIR="${{ runner.temp }}/.android"
-          XDG_CFG_DIR="${{ runner.temp }}/.config"
-          mkdir -p "$ANDROID_USER_DIR" "$XDG_CFG_DIR/.android"
-          sudo mkdir -p "$HOME/.config/.android" "$HOME/.android" 2>/dev/null || true
-          sudo chown -R "$(id -u):$(id -g)" "$HOME/.config" "$HOME/.android" 2>/dev/null || true
-          chmod -R u+rwX "$HOME/.config" "$HOME/.android" "$ANDROID_USER_DIR" "$XDG_CFG_DIR" 2>/dev/null || true
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
-          SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          echo "ANDROID_HOME=$SDK_DIR" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> "$GITHUB_ENV"
-          echo "ANDROID_USER_HOME=$ANDROID_USER_DIR" >> "$GITHUB_ENV"
-          echo "ANDROID_PREFS_ROOT=$ANDROID_USER_DIR" >> "$GITHUB_ENV"
-          echo "XDG_CONFIG_HOME=$XDG_CFG_DIR" >> "$GITHUB_ENV"
-
-          SDKMANAGER=$(find "$SDK_DIR/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -n 1)
-          if [ -n "$SDKMANAGER" ]; then
-            (yes | sudo -H "$SDKMANAGER" --sdk_root="$SDK_DIR" --licenses > /dev/null 2>&1) || (yes | "$SDKMANAGER" --sdk_root="$SDK_DIR" --licenses > /dev/null 2>&1) || true
-            if [ ! -d "$SDK_DIR/platforms/android-35" ] || [ ! -d "$SDK_DIR/build-tools/35.0.0" ]; then
-              sudo -H "$SDKMANAGER" --sdk_root="$SDK_DIR" "platform-tools" "platforms;android-35" "build-tools;35.0.0" || \
-                "$SDKMANAGER" --sdk_root="$SDK_DIR" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-            fi
-          fi
-          ls -la "$SDK_DIR/platforms" "$SDK_DIR/build-tools" || true
-
-      - name: Setup Gradle
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: "8.9"
 
-      - name: Detect Android Project Directory
-        id: paths
+      - name: Prepare Android project
+        shell: bash
         run: |
-          if [ -f "settings.gradle.kts" ]; then
-            echo "dir=." >> "$GITHUB_OUTPUT"
-          elif [ -f "android-native/settings.gradle.kts" ]; then
-            echo "dir=android-native" >> "$GITHUB_OUTPUT"
-          else
-            echo "settings.gradle.kts not found" >&2
+          set -euo pipefail
+
+          DIR="android-native"
+          if [ ! -f "$DIR/settings.gradle.kts" ]; then
+            echo "File $DIR/settings.gradle.kts tidak ditemukan."
             exit 1
           fi
 
-      - name: Write local.properties, Debug Keystore & Sync Web Assets
-        run: |
-          DIR="${{ steps.paths.outputs.dir }}"
-          SDK_DIR="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          echo "sdk.dir=$SDK_DIR" > "$DIR/local.properties"
+          if [ -z "${ANDROID_HOME:-}" ]; then
+            echo "ANDROID_HOME belum diatur."
+            exit 1
+          fi
+
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > "$DIR/local.properties"
 
           if [ ! -f "$DIR/app/ci-debug.keystore" ]; then
             keytool -genkeypair -v \
               -keystore "$DIR/app/ci-debug.keystore" \
-              -storepass android -keypass android \
+              -storepass android \
+              -keypass android \
               -alias androiddebugkey \
-              -keyalg RSA -keysize 2048 -validity 10000 \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
               -dname "CN=Android Debug,O=Android,C=US"
           fi
 
           if [ -f "public/exambro.html" ]; then
             mkdir -p "$DIR/app/src/main/assets/web/icons"
             cp public/exambro.html "$DIR/app/src/main/assets/web/index.html"
-            [ -f "public/manifest.json" ] && cp public/manifest.json "$DIR/app/src/main/assets/web/"
-            [ -f "public/sw.js" ] && cp public/sw.js "$DIR/app/src/main/assets/web/"
-            [ -d "public/icons" ] && cp -r public/icons/* "$DIR/app/src/main/assets/web/icons/"
+
+            if [ -f "public/manifest.json" ]; then
+              cp public/manifest.json "$DIR/app/src/main/assets/web/"
+            fi
+
+            if [ -f "public/sw.js" ]; then
+              cp public/sw.js "$DIR/app/src/main/assets/web/"
+            fi
+
+            if [ -d "public/icons" ]; then
+              cp -r public/icons/. "$DIR/app/src/main/assets/web/icons/"
+            fi
           fi
 
-      - name: Decode Release Keystore (Optional GitHub Secrets)
+      - name: Configure release signing from GitHub Secrets
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        shell: bash
         run: |
-          DIR="${{ steps.paths.outputs.dir }}"
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$DIR/app/release-keystore.jks"
-            printf "storeFile=release-keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n" \
-              "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > "$DIR/keystore.properties"
+          set -euo pipefail
+          DIR="android-native"
+
+          if [ -n "${KEYSTORE_BASE64:-}" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode \
+              > "$DIR/app/release-keystore.jks"
+
+            printf 'storeFile=release-keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              "$KEYSTORE_PASSWORD" \
+              "$KEY_ALIAS" \
+              "$KEY_PASSWORD" \
+              > "$DIR/keystore.properties"
+          else
+            echo "KEYSTORE_BASE64 tidak diatur; build release akan memakai konfigurasi tanpa keystore khusus."
           fi
 
-      - name: Build Debug & Release APK + AAB
-        working-directory: ${{ steps.paths.outputs.dir }}
+      - name: Build APK and AAB
+        working-directory: android-native
         run: gradle assembleDebug assembleRelease bundleRelease --no-daemon --stacktrace
 
-      - name: Collect Release Artifacts
+      - name: Collect build artifacts
+        shell: bash
         run: |
-          DIR="${{ steps.paths.outputs.dir }}"
+          set -euo pipefail
           mkdir -p build-artifacts
-          cp "$DIR"/app/build/outputs/apk/debug/*.apk build-artifacts/ 2>/dev/null || true
-          cp "$DIR"/app/build/outputs/apk/release/*.apk build-artifacts/ 2>/dev/null || true
-          cp "$DIR"/app/build/outputs/bundle/release/*.aab build-artifacts/ 2>/dev/null || true
+
+          cp android-native/app/build/outputs/apk/debug/*.apk build-artifacts/
+          cp android-native/app/build/outputs/apk/release/*.apk build-artifacts/
+          cp android-native/app/build/outputs/bundle/release/*.aab build-artifacts/
+
           ls -lh build-artifacts/
 
-      - name: Upload APK & AAB Artifacts
+      - name: Upload APK and AAB
         uses: actions/upload-artifact@v4
         with:
           name: prida-exambro-android-builds
