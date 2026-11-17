@@ -18,6 +18,14 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK Licenses & Install API 35
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -56,17 +64,16 @@ jobs:
           DIR="${{ steps.paths.outputs.dir }}"
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > "$DIR/app/release-keystore.jks"
-            cat <<EOF > "$DIR/keystore.properties"
-          storeFile=release-keystore.jks
-          storePassword=$KEYSTORE_PASSWORD
-          keyAlias=$KEY_ALIAS
-          keyPassword=$KEY_PASSWORD
-          EOF
+            printf "storeFile=release-keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n" \
+              "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > "$DIR/keystore.properties"
           fi
 
       - name: Build Debug & Release APK + AAB
         working-directory: ${{ steps.paths.outputs.dir }}
-        run: gradle assembleDebug assembleRelease bundleRelease --no-daemon
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+        run: gradle assembleDebug assembleRelease bundleRelease --no-daemon --stacktrace
 
       - name: Collect Release Artifacts
         run: |
