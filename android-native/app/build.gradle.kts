@@ -29,6 +29,12 @@ android {
     }
 
     signingConfigs {
+        getByName("debug") {
+            val ciDebugKeystore = file("ci-debug.keystore")
+            if (ciDebugKeystore.exists()) {
+                storeFile = ciDebugKeystore
+            }
+        }
         create("release") {
             if (keystorePropertiesFile.exists()) {
                 storeFile = file(keystoreProperties.getProperty("storeFile", "release-keystore.jks"))
