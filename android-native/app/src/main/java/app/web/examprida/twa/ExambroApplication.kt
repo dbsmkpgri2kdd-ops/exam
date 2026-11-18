@@ -35,7 +35,7 @@ class ExambroApplication : Application(),
     var isShowingOtherFullscreenAd: Boolean = false
 
     override fun onCreate() {
-        super.onCreate()
+        super<Application>.onCreate()
         registerActivityLifecycleCallbacks(this)
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
 
